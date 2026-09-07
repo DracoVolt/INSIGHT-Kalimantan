@@ -1,0 +1,13 @@
+# Core runtime dependencies
+numpy
+pandas
+geopandas
+shapely
+requests
+scikit-learn
+matplotlib
+seaborn
+
+# Optional app dependencies (install extras for Streamlit + maps)
+# streamlit
+# folium

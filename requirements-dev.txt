@@ -1,0 +1,7 @@
+# Optional dev/app dependencies for IGNIS-Sim
+streamlit
+folium
+jupyter
+ipython
+pytest
+joblib
