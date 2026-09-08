@@ -181,14 +181,14 @@ CA_NEIGHBOR_OFFSETS = (
 
 # CA state labels.
 CA_STATE_HEALTHY: str = "healthy"
-CA_STATE_IGNORING: str = "igniting"
+CA_STATE_IGNITING: str = "igniting"
 CA_STATE_BURNING: str = "burning"
 CA_STATE_BURNED: str = "burned"
 CA_STATE_PEAT_RISK: str = "peat_risk"
 
 CA_STATES = (
     CA_STATE_HEALTHY,
-    CA_STATE_IGNORING,
+    CA_STATE_IGNITING,
     CA_STATE_BURNING,
     CA_STATE_BURNED,
     CA_STATE_PEAT_RISK,

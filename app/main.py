@@ -24,18 +24,12 @@ except Exception:
     STREAMLIT_AVAILABLE = False
 
 from src import config
-from src.ca import CaGrid, CaParams, simulation
+from src.ca import CaGrid, CaParams, run_simulation
 from src.fire_data import build_cell_grid, build_fire_dataset, load_firms_hotspots
 from src.features import build_context_map, build_feature_table
-from src.ml import make_model, train, save_model, save_metrics, predict_risk_map
+from src.ml import make_model, predict_risk_map
 from src.mitigation import build_mitigation_contexts, format_actions_for_display
-from app.ca_simulator import (
-    initialize_simulation,
-    step_forward,
-    state_distribution,
-    mitigation_for,
-    risk_at,
-)
+from app.ca_simulator import initialize_simulation, step_forward, state_distribution, mitigation_for, risk_at
 
 
 APP_TITLE = config.__dict__.get("APP_TITLE", "IGNIS-Sim Kalimantan")

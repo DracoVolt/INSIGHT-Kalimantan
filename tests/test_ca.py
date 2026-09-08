@@ -39,7 +39,7 @@ def test_seed_single_cell():
     assert grid.state_at(0, 0) == CELLState.HEALTHY
 
 
-def test_neighbors_are Moore neighborhood():
+def test_neighbors_are_moore_neighborhood():
     grid = CaGrid().initialize(n_rows=3, n_cols=3)
     neigh = grid.neighbors(1, 1)
     assert (0, 0) in neigh
@@ -73,7 +73,7 @@ def test_step_can_ignite_neighbor():
     grid = step(grid, params=params)
     # With spread_base=1.0, all neighbors should ignite.
     for r, c in grid.neighbors(1, 1):
-        assert grid.state_at(r, c) == CELLState.IGNORING
+        assert grid.state_at(r, c) == CELLState.IGNITING
 
 
 def test_run_simulation_produces_frames():
@@ -91,19 +91,21 @@ def test_peat_risk_cell_state():
     peat[0, 0] = True
     grid = CaGrid().initialize(n_rows=3, n_cols=3, peat_risk_mask=peat)
     assert grid.state_at(0, 0) == CELLState.PEAT_RISK
-    assert grid.peat_risk[0, 0] is True
-    assert grid.peat_risk[1, 1] is False
+    assert bool(grid.peat_risk[0, 0]) is True
+    assert bool(grid.peat_risk[1, 1]) is False
 
 
 def test_wind_alignment_factor_directionality():
     center_row = 1.0
     center_col = 1.0
-    # neighbor directly "north" of center
+    # Wind blows toward north (0 deg). A neighbor to the north (dr=-1, dc=0)
+    # lies exactly downwind -> alignment near 1.0.
     align_north = wind_alignment_factor(1, 1, 0, 1, 0.0, center_row, center_col)
-    # neighbor directly "east" of center
+    assert align_north > 0.9
+    # Wind blows toward east (90 deg). A neighbor to the east (dr=0, dc=1)
+    # lies exactly downwind -> alignment near 1.0.
     align_east = wind_alignment_factor(1, 1, 1, 2, 90.0, center_row, center_col)
-    assert align_north > 0.5
-    assert align_east > 0.5
+    assert align_east > 0.9
 
 
 def test_spread_probability_bounds():

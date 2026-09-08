@@ -116,9 +116,6 @@ class MitigationContext:
 
 def assess_risk(ctx: MitigationContext) -> RiskLevel:
     """Return the risk level for a mitigation context."""
-    if ctx.distance_to_nearest_burning_cell is None and ctx.distance_to_nearest_igniting_cell is None:
-        return RiskLevel.NONE
-
     if ctx.distance_to_nearest_burning_cell is not None and ctx.distance_to_nearest_burning_cell <= 1.0:
         return RiskLevel.HIGH
     if ctx.distance_to_nearest_igniting_cell is not None and ctx.distance_to_nearest_igniting_cell <= 2.0:
@@ -130,7 +127,7 @@ def assess_risk(ctx: MitigationContext) -> RiskLevel:
         return RiskLevel.MEDIUM
 
     if ctx.predicted_risk > 0.5:
-        return RiskLevel.MEDIUM
+        return RiskLevel.HIGH
     if ctx.predicted_risk > 0.2:
         return RiskLevel.LOW
 
@@ -176,7 +173,7 @@ def nearest_burning_or_igniting_distance(
             if d > radius:
                 continue
             state = grid.state_at(r, c)
-            if state in (CellState.BURNING, CellState.IGNORING):
+            if state in (CellState.BURNING, CellState.IGNITING):
                 if state == CellState.BURNING:
                     if nearest_burning is None or d < nearest_burning:
                         nearest_burning = d

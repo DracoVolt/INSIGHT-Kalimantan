@@ -86,7 +86,7 @@ def test_assess_risk_high_predicted_risk():
         predicted_risk=0.6,
         wind_dir_deg=0.0,
     )
-    assert assess_risk(ctx) == RiskLevel.MEDIUM
+    assert assess_risk(ctx) == RiskLevel.HIGH
 
 
 def test_actions_for_none_is_empty():

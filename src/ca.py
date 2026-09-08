@@ -33,7 +33,7 @@ from . import config
 
 class CellState(enum.Enum):
     HEALTHY = config.CA_STATE_HEALTHY
-    IGNITING = config.CA_STATE_IGNORING
+    IGNITING = config.CA_STATE_IGNITING
     BURNING = config.CA_STATE_BURNING
     BURNED = config.CA_STATE_BURNED
     PEAT_RISK = config.CA_STATE_PEAT_RISK
@@ -41,14 +41,17 @@ class CellState(enum.Enum):
 
 # Convenience accessors
 STATE_HEALTHY = CellState.HEALTHY
-STATE_IGNORING = CellState.IGNORING
+STATE_IGNITING = CellState.IGNITING
 STATE_BURNING = CellState.BURNING
 STATE_BURNED = CellState.BURNED
 STATE_PEAT_RISK = CellState.PEAT_RISK
 
-
 STATE_TO_LABEL: Dict[CellState, str] = {s: s.value for s in CellState}
 LABEL_TO_STATE: Dict[str, CellState] = {v: k for k, v in STATE_TO_LABEL.items()}
+
+
+# Public alias used by tests and other modules
+CELLState = CellState
 
 
 # ---------------------------------------------------------------------------
@@ -60,22 +63,13 @@ LABEL_TO_STATE: Dict[str, CellState] = {v: k for k, v in STATE_TO_LABEL.items()}
 class CaGrid:
     """A CA grid over the demo bounding box."""
 
-    n_rows: int
-    n_cols: int
+    n_rows: int = 0
+    n_cols: int = 0
     states: np.ndarray = field(default_factory=lambda: np.empty((0, 0), dtype=object))
     peat_risk: np.ndarray = field(default_factory=lambda: np.empty((0, 0), dtype=bool))
     burning_intensity: np.ndarray = field(
         default_factory=lambda: np.empty((0, 0), dtype=float)
     )
-
-    def clone(self) -> "CaGrid":
-        return CaGrid(
-            n_rows=self.n_rows,
-            n_cols=self.n_cols,
-            states=self.states.copy(),
-            peat_risk=self.peat_risk.copy(),
-            burning_intensity=self.burning_intensity.copy(),
-        )
 
     def initialize(
         self,
@@ -93,6 +87,17 @@ class CaGrid:
             self.states[peat_risk_mask] = CellState.PEAT_RISK
         return self
 
+    def clone(self) -> "CaGrid":
+        import copy
+
+        g = CaGrid()
+        g.n_rows = self.n_rows
+        g.n_cols = self.n_cols
+        g.states = self.states.copy()
+        g.peat_risk = self.peat_risk.copy()
+        g.burning_intensity = self.burning_intensity.copy()
+        return g
+
     def set_state(self, row: int, col: int, state: CellState) -> None:
         if 0 <= row < self.n_rows and 0 <= col < self.n_cols:
             self.states[row, col] = state
@@ -101,7 +106,7 @@ class CaGrid:
         return self.states[row, col]
 
     def is_burning(self, row: int, col: int) -> bool:
-        return self.states[row, col] in (CellState.BURNING, CellState.IGNORING)
+        return self.states[row, col] in (CellState.BURNING, CellState.IGNITING)
 
     def is_burnable(self, row: int, col: int) -> bool:
         s = self.states[row, col]
@@ -167,7 +172,9 @@ def wind_alignment_factor(
     if dr == 0 and dc == 0:
         return 0.0
 
-    bearing = float(np.degrees(np.arctan2(dc, dr)))
+    # Grid convention: row increases southward, col increases eastward.
+    # Compass bearing of the src->dst step: 0 = north, 90 = east, ...
+    bearing = float(np.degrees(np.arctan2(dc, -dr)))
     if bearing < 0:
         bearing += 360.0
 
@@ -265,7 +272,7 @@ def step(
     for row in range(grid.n_rows):
         for col in range(grid.n_cols):
             current = grid.states[row, col]
-            if current in (CellState.BURNING, CellState.IGNORING):
+            if current in (CellState.BURNING, CellState.IGNITING):
                 next_states[row, col] = CellState.BURNED
                 next_intensity[row, col] = grid.burning_intensity[row, col] + 1.0
 
@@ -282,7 +289,7 @@ def step(
                         center_row, center_col,
                     )
                     if rng.random() < p:
-                        next_states[nr, nc] = CellState.IGNORING
+                        next_states[nr, nc] = CellState.IGNITING
                         next_intensity[nr, nc] = 0.5
 
     grid.states = next_states

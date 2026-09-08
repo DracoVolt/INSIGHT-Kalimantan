@@ -20,7 +20,12 @@ from src.ca import (
     seed_from_hotspots,
     step,
 )
-from src.fire_data import FireDataset, build_cell_grid, build_fire_dataset, load_firms_hotspots
+from src.fire_data import (
+    FireDataset,
+    build_cell_grid,
+    build_fire_dataset,
+    load_firms_hotspots,
+)
 from src.features import build_context_map
 from src.ml import predict_risk_map
 from src.mitigation import (
