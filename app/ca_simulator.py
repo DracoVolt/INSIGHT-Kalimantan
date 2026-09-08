@@ -157,5 +157,9 @@ def mitigation_for(state: SimState, row: int, col: int) -> List[Dict[str, str]]:
     return format_actions_for_display(actions_for(ctx))
 
 
-def state_distribution(state: SimState) -> Dict[str, int]:
+def state_distribution(state: Any) -> Dict[str, int]:
+    """Return the cell-state summary for a SimState or a CaGrid."""
+    from src.ca import CaGrid
+    if isinstance(state, CaGrid):
+        return state.summary()
     return state.grid.summary()

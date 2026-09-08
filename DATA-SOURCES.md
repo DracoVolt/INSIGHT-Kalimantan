@@ -5,13 +5,14 @@ them, and what license or terms apply.
 
 The demo bounding box is:
 
-- Min longitude: -2.6
-- Min latitude: 2.4
-- Max longitude: -0.6
-- Max latitude: 4.4
+- Min longitude: 112.5°E
+- Min latitude: 3.5°S
+- Max longitude: 114.5°E
+- Max latitude: 1.5°S
 
 That is a 2-degree-by-2-degree box in Central Kalimantan, anchored on the
-Palangkaraya / Sebangau / Kahayan peatland forest area.
+Palangkaraya / Sebangau / Kahayan peatland forest area. In decimal degrees
+(WGS84): (112.5, -3.5) to (114.5, -1.5).
 
 ## 1. OpenStreetMap data
 

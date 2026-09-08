@@ -143,26 +143,32 @@ def feature_importance_table(model: Model) -> pd.DataFrame:
 
 
 def predict_risk_map(
-    model: Model,
+    model: Optional[Model],
     context_map: Any,
     wind_dir_deg: Optional[float] = None,
     bounding_box: Optional[Tuple[float, float, float, float]] = None,
     cell_grid: Optional[Any] = None,
 ) -> np.ndarray:
-    """Return a 2D risk map (n_rows x n_cols) of per-cell predicted probabilities."""
-    from .features import build_context_map
-    from .fire_data import build_cell_grid
+    """Return a 2D risk map (n_rows x n_cols) of per-cell predicted probabilities.
 
+    If *model* is None (e.g. no trained model yet), the returned map is a
+    heuristic baseline built from wind alignment, peat proximity, and
+    distance to water/settlement so the demo still shows a meaningful risk
+    surface. Otherwise the trained model is used.
+    """
     if wind_dir_deg is None:
         wind_dir_deg = config.default_wind_direction_deg()
     if bounding_box is None:
         bounding_box = config.bounding_box()
     if cell_grid is None:
-        cell_grid = build_cell_grid(bounding_box=bounding_box)
+        from .fire_data import build_cell_grid as _build_cell_grid
+        cell_grid = _build_cell_grid(bounding_box=bounding_box)
     if context_map is None:
-        context_map = build_context_map()
+        from .features import build_context_map as _build_context_map
+        context_map = _build_context_map()
 
     feature_cols = [c for c in feature_names() if c not in ("lon", "lat")]
+    has_model = model is not None and hasattr(model, "predict_proba") or (model is not None and hasattr(model, "predict"))
     risk = np.zeros((cell_grid.n_rows, cell_grid.n_cols), dtype=float)
 
     for row, col in cell_grid.iter_cells():
@@ -189,9 +195,26 @@ def predict_risk_map(
             "lon": float(cell_grid.row_col_to_center(row, col)[0]),
             "lat": float(cell_grid.row_col_to_center(row, col)[1]),
         }
-        x = np.array([[feats[c] for c in feature_cols]], dtype=float)
-        prob = model.predict_proba(x)[0, 1] if hasattr(model, "predict_proba") else float(model.predict(x)[0])
-        risk[row, col] = float(prob)
+        if has_model:
+            x = np.array([[feats[c] for c in feature_cols]], dtype=float)
+            prob = model.predict_proba(x)[0, 1] if hasattr(model, "predict_proba") else float(model.predict(x)[0])
+            risk[row, col] = float(prob)
+        else:
+            # Heuristic baseline: higher risk downwind, on peat, near settlements,
+            # and lower risk near water.
+            wind_align = feats["wind_alignment"]
+            peat = feats["peat_risk_flag"]
+            d_settle = feats["distance_to_nearest_settlement_cell"]
+            d_water = feats["distance_to_nearest_water_cell"]
+            base = 0.05
+            risk_val = (
+                base
+                + 0.25 * wind_align
+                + 0.15 * peat
+                + 0.10 * max(0.0, 1.0 - d_settle / 5.0)
+                - 0.08 * max(0.0, 1.0 - d_water / 5.0)
+            )
+            risk[row, col] = float(min(0.95, max(0.0, risk_val)))
 
     return risk
 

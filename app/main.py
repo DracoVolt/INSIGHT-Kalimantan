@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 try:
+    import pandas as pd
     import streamlit as st
     STREAMLIT_AVAILABLE = True
 except Exception:
@@ -117,23 +118,28 @@ def run_streamlit() -> None:
         st.subheader("Risk map (ML)")
         if state.risk_map is not None:
             st.write("Predicted fire presence probability per cell.")
+            rows = current_frame.n_rows
+            cols = current_frame.n_cols
+            min_lon, min_lat, max_lon, max_lat = config.bounding_box()
+            d_lon = config.grid_spacing_deg()
+            d_lat = config.grid_spacing_deg()
             st.map(
                 pd.DataFrame(
                     {
                         "lat": [
-                            config.bounding_box()[1]
-                            + (row + 0.5) * config.grid_spacing_deg()
-                            for row in range(current_frame.n_rows)
+                            min_lat + (row + 0.5) * d_lat
+                            for row in range(rows)
+                            for _col in range(cols)
                         ],
                         "lon": [
-                            config.bounding_box()[0]
-                            + (col + 0.5) * config.grid_spacing_deg()
-                            for col in range(current_frame.n_cols)
+                            min_lon + (col + 0.5) * d_lon
+                            for _row in range(rows)
+                            for col in range(cols)
                         ],
                         "risk": [
                             risk_at(state, row, col)
-                            for row in range(current_frame.n_rows)
-                            for col in range(current_frame.n_cols)
+                            for row in range(rows)
+                            for col in range(cols)
                         ],
                     }
                 )

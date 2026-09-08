@@ -45,10 +45,15 @@ def figures_dir() -> Path:
 
 # Demo bounding box: Central Kalimantan around Palangkaraya / Sebangau / Kahayan.
 # Coordinates in decimal degrees (WGS84).
-_MIN_LON: float = -2.6
-_MIN_LAT: float = 2.4
-_MAX_LON: float = -0.6
-_MAX_LAT: float = 4.4
+#
+# Palangkaraya is at approx 2.22 S, 113.90 E. The Sebangau and Kahayan
+# peatland forests lie roughly between 112.5-114.5 E and 1.5-3.5 S.
+# A 2 deg x 2 deg box centered here is about 222 km x 222 km; the grid
+# resolution (~0.035 deg) gives ~4 km cells.
+_MIN_LON: float = 112.5
+_MIN_LAT: float = -3.5
+_MAX_LON: float = 114.5
+_MAX_LAT: float = -1.5
 
 
 def bounding_box() -> Tuple[float, float, float, float]:
@@ -71,9 +76,8 @@ _M_PER_DEG_LAT: float = 111_000.0
 # Approximate meters per degree of longitude at the mid-latitude of the box.
 # Used only for documentation; the CA itself works in index space.
 _MID_LAT: float = (_MIN_LAT + _MAX_LAT) / 2.0
-_M_PER_DEG_LON: float = _M_PER_DEG_LAT * (3.141592653589793 / 180.0) * (
-    1.0 / 1.0
-)  # placeholder constant; real value varies with latitude
+import math as _math
+_M_PER_DEG_LON: float = _M_PER_DEG_LAT * _math.cos(_math.radians(abs(_MID_LAT)))
 
 
 def grid_spacing_deg() -> float:
@@ -225,3 +229,11 @@ MITIGATION_RISK_RADIUS_CELLS: int = 2
 
 # Distance in grid cells for "nearby rural area" detection.
 MITIGATION_RURAL_RADIUS_CELLS: int = 3
+
+
+def mitigation_risk_radius_cells() -> int:
+    return MITIGATION_RISK_RADIUS_CELLS
+
+
+def mitigation_rural_radius_cells() -> int:
+    return MITIGATION_RURAL_RADIUS_CELLS
