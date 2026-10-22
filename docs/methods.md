@@ -2,7 +2,7 @@
 
 ## Overview
 
-IGNIS-Sim Kalimantan has three connected parts:
+INSIGHT Kalimantan has three connected parts:
 
 1. A grid over the demo bounding box.
 2. A physics Cellular Automaton (CA) that moves fire through the grid.
@@ -47,16 +47,18 @@ The ML part predicts a simple yes/no question: did a FIRMS hotspot appear in thi
 cell on this day?
 
 Features:
-- recent hotspot history in the cell,
+- recent hotspot history in the cell (1, 3 and 7 days, plus the 7-day count),
+- distance to the nearest hotspot on the previous day,
 - wind alignment of the cell,
 - distance to the nearest water cell,
 - distance to the nearest settlement cell,
-- peat risk flag,
-- land cover context.
+- cell row and column,
+- peat risk flag.
 
-The baseline model is a random forest or logistic regression. The project uses a
-simple train/test split and reports accuracy, precision, recall, and ROC-AUC so
-the model can be discussed honestly.
+The baseline model is a random forest. The project holds out the last two FIRMS
+days instead of splitting rows at random — otherwise the same cell appears on
+both sides of the split and the metrics flatter the model — and reports
+accuracy, precision, recall, ROC-AUC and PR-AUC so it can be discussed honestly.
 
 ## How the parts connect
 

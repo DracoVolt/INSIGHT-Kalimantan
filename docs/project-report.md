@@ -1,4 +1,4 @@
-# Project report: IGNIS-Sim Kalimantan
+# Project report: INSIGHT Kalimantan
 
 ## Problem
 
