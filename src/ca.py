@@ -1,4 +1,4 @@
-"""Cellular Automaton (CA) for wildfire spread in IGNIS-Sim.
+"""Cellular Automaton (CA) for wildfire spread in INSIGHT.
 
 This is the physics part of the science project. The CA uses a simple,
 transparent update rule:
@@ -164,8 +164,9 @@ def wind_alignment_factor(
 ) -> float:
     """Return a [0,1] factor for how well the step from src to dst aligns with wind.
 
-    1 means the neighbor lies exactly downwind from the source cell, 0 means it
-    lies upwind.
+    ``wind_dir_deg`` follows the meteorological convention used everywhere else
+    in the project (0 = wind FROM north, 90 = wind FROM east). 1 means the
+    neighbor lies exactly downwind of the source cell, 0 means it lies upwind.
     """
     dr = dst_row - src_row
     dc = dst_col - src_col
@@ -178,8 +179,10 @@ def wind_alignment_factor(
     if bearing < 0:
         bearing += 360.0
 
-    wind_dir = wind_dir_deg % 360.0
-    diff = abs(bearing - wind_dir)
+    # wind_dir_deg is meteorological (the direction the wind blows FROM), so a
+    # fire pushed by a wind "from 90 deg" travels toward 270 deg.
+    downwind = (wind_dir_deg + 180.0) % 360.0
+    diff = abs(bearing - downwind)
     if diff > 180.0:
         diff = 360.0 - diff
 

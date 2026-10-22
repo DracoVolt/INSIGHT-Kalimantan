@@ -1,4 +1,4 @@
-# IGNIS-Sim Kalimantan
+# INSIGHT
 
 Wildfire spread simulation and civilian-mitigation guidance for Central Kalimantan,
 built as a high-school science project that combines:
@@ -54,10 +54,32 @@ The first time you run the project, the data download scripts will attempt to fe
 OSM and FIRMS data for the configured bounding box. Those steps can also be run
 manually from the notebooks in `notebooks/`.
 
+## Train the risk model
+
+The risk map is a trained Random Forest, not a hand-written formula. Download a
+7-day NASA FIRMS export (https://firms.modaps.eosdis.nasa.gov/) and train:
+
+```bash
+.venv/bin/python -m src.train --firms data/raw/MODIS_C6_1_Global_7d.csv
+```
+
+Training filters the export to the demo box (writing `data/raw/firms_hotspots.csv`
+for CA seeding), caches the OSM snapshot so training and inference share the same
+masks, evaluates on the last 20% of days, and writes `models/risk_rf.joblib` plus
+`models/risk_rf_metrics.json`. The app loads those files on start and conditions
+its prediction on the most recent FIRMS day; if they are missing it falls back to
+the heuristic baseline and says so in the sidebar.
+
+Trained on the bundled 7-day MODIS export (1,770 hotspots in the demo box over 8
+days, 26,912 cell-days, 3.2% positive), the forest scores ROC-AUC 0.883 and
+PR-AUC 0.283 on the two held-out final days. That is a genuine prediction, but a
+modest one: PR-AUC 0.283 over a 0.032 base rate means the top-ranked cells are
+roughly nine times likelier to burn than average, not that any single cell will.
+
 ## Repository layout
 
 ```
-ignis-sim-kalimantan/
+insight-kalimantan/
 ├── README.md
 ├── LICENSE
 ├── .gitignore
@@ -78,6 +100,8 @@ ignis-sim-kalimantan/
 │   ├── features.py
 │   ├── ca.py
 │   ├── ml.py
+│   ├── train.py
+│   ├── land_mask.py
 │   └── mitigation.py
 │
 ├── app/
@@ -94,6 +118,14 @@ ignis-sim-kalimantan/
 │   ├── project-report.md
 │   ├── methods.md
 │   └── civilian-mitigation.md
+│
+├── assets/
+│   ├── icons/
+│   └── geo/kalimantan_land.geojson
+│
+├── models/
+│   ├── risk_rf.joblib
+│   └── risk_rf_metrics.json
 │
 ├── tests/
 └── figures/

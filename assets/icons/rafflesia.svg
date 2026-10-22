@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <circle cx="32" cy="32" r="30" fill="#fff0fa" stroke="#be185d" stroke-width="4"/>
+  <!-- five petals -->
+  <g fill="#e11d76">
+    <ellipse cx="32" cy="17" rx="10" ry="8" transform="rotate(0 32 32)"/>
+    <ellipse cx="32" cy="17" rx="10" ry="8" transform="rotate(72 32 32)"/>
+    <ellipse cx="32" cy="17" rx="10" ry="8" transform="rotate(144 32 32)"/>
+    <ellipse cx="32" cy="17" rx="10" ry="8" transform="rotate(216 32 32)"/>
+    <ellipse cx="32" cy="17" rx="10" ry="8" transform="rotate(288 32 32)"/>
+  </g>
+  <!-- speckles -->
+  <g fill="#f9a8d4">
+    <circle cx="32" cy="20" r="1.6"/>
+    <circle cx="42" cy="28" r="1.6"/>
+    <circle cx="38" cy="40" r="1.6"/>
+    <circle cx="26" cy="40" r="1.6"/>
+    <circle cx="22" cy="28" r="1.6"/>
+  </g>
+  <!-- center -->
+  <circle cx="32" cy="32" r="7" fill="#7f1d1d"/>
+  <circle cx="32" cy="32" r="3.4" fill="#fbbf24"/>
+</svg>

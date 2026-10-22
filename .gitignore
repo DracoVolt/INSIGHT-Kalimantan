@@ -20,7 +20,10 @@ _env/
 *.zip
 *.tar.gz
 *.7z
-data/raw/
+# Large raw downloads stay local. The small filtered FIRMS subset is committed
+# so a fresh clone can seed the CA and run the trained model as-is.
+data/raw/*
+!data/raw/firms_hotspots.csv
 data/processed/
 demos/
 figures/

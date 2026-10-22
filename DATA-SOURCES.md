@@ -1,6 +1,6 @@
 # Data sources
 
-This document records the data sources used by IGNIS-Sim Kalimantan, where to get
+This document records the data sources used by INSIGHT Kalimantan, where to get
 them, and what license or terms apply.
 
 The demo bounding box is:
@@ -52,7 +52,37 @@ you already have a CSV from FIRMS, place it in `data/raw/` and name it
 License / terms: NASA FIRMS data has its own data use terms; check the FIRMS site
 for the current terms before using it in a public project.
 
-## 3. Peatland and hydrology context
+## 3. iNaturalist biodiversity observations
+
+Used for: the flora & fauna map layer (endemic Kalimantan species that
+overlaps the simulated fire path).
+
+Source: iNaturalist observations API, research-grade observations only.
+
+- Portal: https://www.inaturalist.org
+- Observations API (v2, used by `src/bio_v2.py`):
+  https://api.inaturalist.org/v2/observations
+- API docs: https://api.inaturalist.org/v1/docs/
+
+Demo taxa (configured in `src/bio_v2.py` and `src/bio_loader.py`):
+
+- Orangutan (Orangutan)
+- Proboscis monkey (Proboscis monkey)
+- Rafflesia arnoldii
+- Nepenthes (pitcher plants)
+
+License / terms: observation data is released under Creative Commons licenses
+(CC0 / CC-BY / CC-BY-NC depending on each observer's setting). Follow the API
+recommended practices: https://www.inaturalist.org/pages/api+recommended+practices
+
+Notes for this project:
+
+- Query parameters: `taxon_name`, `bbox` (the demo bounding box),
+  `quality_grade=research`, paginated 200 per page.
+- Offline fallback fixture: `src/bio_stub_fixture.json` so the demo runs without
+  internet.
+
+## 4. Peatland and hydrology context
 
 Used for: peat risk flag, river mask, and the "peatland forest" story for
 Sebangau / Kahayan.
@@ -67,7 +97,7 @@ Because peat data availability varies by region and by access, this project does
 not assume a single fixed public peat raster. If you find a usable Kalimantan peat
 dataset, add it to `data/raw/` and record it here.
 
-## 4. Wind / weather data
+## 5. Wind / weather data
 
 Used for: the CA spread direction and as a feature for the ML model.
 
@@ -82,7 +112,7 @@ If you want a more realistic wind source later, possible public options include:
 Any real wind source should be documented here with its access method, resolution,
 and license.
 
-## 5. Additional context
+## 6. Additional context
 
 Optional context data you may want to look for:
 

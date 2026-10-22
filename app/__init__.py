@@ -1,1 +1,1 @@
-"""IGNIS-Sim Kalimantan demo application."""
+"""INSIGHT Kalimantan demo application."""

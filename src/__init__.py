@@ -1,3 +1,3 @@
-"""IGNIS-Sim Kalimantan core library."""
+"""INSIGHT Kalimantan core library."""
 
 __version__ = "0.1.0"

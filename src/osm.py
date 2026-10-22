@@ -11,6 +11,7 @@ not a full GIS pipeline.
 from __future__ import annotations
 
 import json
+import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -50,6 +51,12 @@ class OsmSnapshot:
 # ---------------------------------------------------------------------------
 
 
+# Tag keys the feature builder actually reads (water, settlements, peat).
+# Buildings and roads are not used as features, so fetching them would only
+# inflate the Overpass payload and slow the first render.
+OSM_FEATURE_TAGS = ("natural", "waterway", "water", "place", "landuse")
+
+
 def _build_overpass_query(
     min_lon: float,
     min_lat: float,
@@ -64,34 +71,35 @@ def _build_overpass_query(
     This is intentionally simple. It fetches nodes and ways with any of the
     requested tags inside the bounding box.
     """
-    box = f"{min_lon},{min_lat},{max_lon},{max_lat}"
-    tag_filter = "[~\"a\"~\".*\"]" if tags is None else build_tag_filter(tags)
+    # Overpass bounding boxes are (south, west, north, east) = (lat, lon, lat, lon).
+    box = f"{min_lat},{min_lon},{max_lat},{max_lon}"
+    keys = list(tags) if tags else list(OSM_FEATURE_TAGS)
 
-    row_limit = ""
-    if max_rows is not None:
-        row_limit = f"({max_rows});"
+    # One statement per key uses Overpass' tag indexes; a single key-regex
+    # filter would force a scan and time out even on a small bbox.
+    statements = []
+    for key in keys:
+        statements.append(f'  node["{key}"]({box});')
+        statements.append(f'  way["{key}"]({box});')
 
-    query = f"""
-[out:json][timeout:{timeout}];
-(
-  node{tag_filter}{box};
-  way{tag_filter}{box};
-);
-{row_limit}
-out center;
-"""
-    return query.strip()
+    query = (
+        f"[out:json][timeout:{timeout}];\n(\n"
+        + "\n".join(statements)
+        + "\n);\nout center;"
+    )
+    return query
 
 
-def build_tag_filter(tags: List[str]) -> str:
-    """Build a simple Overpass tag filter for the given tag keys.
+def build_tag_filter(tags: Optional[List[str]] = None) -> str:
+    """Build a valid Overpass key-regex filter for the requested tag keys.
 
-    The returned filter matches elements that have any of the given keys.
+    Overpass rejects a union of several ``["key"]`` filters, which is why the
+    earlier query returned HTTP 400. A single key-regex filter is valid QL and
+    matches any element carrying one of the requested keys.
     """
-    if not tags:
-        return "[~\"a\"~\".*\"]"
-    parts = [f'["{key}\"]' for key in tags]
-    return f"({'|'.join(parts)})"
+    keys = list(tags) if tags else list(OSM_FEATURE_TAGS)
+    pattern = "|".join(re.escape(key) for key in keys)
+    return f'[~"^({pattern})$"~"."]'
 
 
 def fetch_overpass(
@@ -126,7 +134,7 @@ def fetch_overpass(
                 endpoint,
                 data={"data": query},
                 timeout=timeout_sec + 30,
-                headers={"User-Agent": "IGNIS-Sim-Kalimantan/0.1.0 (science project)"},
+                headers={"User-Agent": "INSIGHT-Kalimantan/0.1.0 (science project)"},
             )
             resp.raise_for_status()
             payload = resp.json()
@@ -208,6 +216,26 @@ def fetch_bounding_box_features(
         features=features,
         timestamp=time.time(),
     )
+
+
+def load_or_fetch_snapshot(max_age_days: float = 7.0) -> OsmSnapshot:
+    """Return a cached OSM snapshot, fetching a new one when it is missing or old.
+
+    Training and inference must see the same water/settlement/peat masks, so the
+    snapshot is cached on disk (``data/raw/osm_snapshot.json``) and reused by
+    both. Overpass is also the slowest part of the first render.
+    """
+    path = config.data_raw_dir() / "osm_snapshot.json"
+    if path.exists():
+        age_days = (time.time() - path.stat().st_mtime) / 86400.0
+        if age_days <= max_age_days:
+            try:
+                return load_snapshot(path)
+            except (OSError, ValueError, KeyError):
+                pass
+    snapshot = fetch_bounding_box_features()
+    save_snapshot(snapshot, path)
+    return snapshot
 
 
 def save_snapshot(snapshot: OsmSnapshot, path: Optional[Path] = None) -> Path:

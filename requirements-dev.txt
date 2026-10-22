@@ -1,7 +1,9 @@
-# Optional dev/app dependencies for IGNIS-Sim
+# Optional dev/app dependencies for INSIGHT
 streamlit
 folium
+streamlit-folium
 jupyter
 ipython
 pytest
 joblib
+python-docx  # builds docs/paper/INSIGHT-naskah-revisi.docx

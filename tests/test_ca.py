@@ -98,14 +98,30 @@ def test_peat_risk_cell_state():
 def test_wind_alignment_factor_directionality():
     center_row = 1.0
     center_col = 1.0
-    # Wind blows toward north (0 deg). A neighbor to the north (dr=-1, dc=0)
-    # lies exactly downwind -> alignment near 1.0.
-    align_north = wind_alignment_factor(1, 1, 0, 1, 0.0, center_row, center_col)
-    assert align_north > 0.9
-    # Wind blows toward east (90 deg). A neighbor to the east (dr=0, dc=1)
-    # lies exactly downwind -> alignment near 1.0.
+    # Meteorological convention: 0 deg means wind FROM the north, so the fire is
+    # pushed southward (row index increases southward -> dr=+1 is downwind).
+    align_downwind = wind_alignment_factor(1, 1, 2, 1, 0.0, center_row, center_col)
+    assert align_downwind > 0.9
+    align_upwind = wind_alignment_factor(1, 1, 0, 1, 0.0, center_row, center_col)
+    assert align_upwind < 0.1
+
+    # 90 deg means wind FROM the east, so it pushes the fire westward.
+    align_west = wind_alignment_factor(1, 1, 1, 0, 90.0, center_row, center_col)
+    assert align_west > 0.9
     align_east = wind_alignment_factor(1, 1, 1, 2, 90.0, center_row, center_col)
-    assert align_east > 0.9
+    assert align_east < 0.1
+
+    # A step perpendicular to the wind gets exactly half the weight.
+    perp = wind_alignment_factor(1, 1, 1, 2, 0.0, center_row, center_col)
+    assert abs(perp - 0.5) < 1e-9
+
+
+def test_spread_probability_matches_documented_range():
+    params = CaParams(wind_dir_deg=0)
+    downwind_peat = spread_probability(1, 1, 2, 1, True, params, 1.0, 1.0)
+    upwind_plain = spread_probability(1, 1, 0, 1, False, params, 1.0, 1.0)
+    assert abs(downwind_peat - 0.60) < 1e-9
+    assert abs(upwind_plain - 0.15) < 1e-9
 
 
 def test_spread_probability_bounds():

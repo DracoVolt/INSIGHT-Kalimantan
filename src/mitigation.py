@@ -1,4 +1,4 @@
-"""Civilian-mitigation logic for IGNIS-Sim.
+"""Civilian-mitigation logic for INSIGHT.
 
 This module implements a small, transparent rule set that decides when to show
 mitigation guidance to civilians in a rural or settlement area that the CA
@@ -15,6 +15,74 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 
 from . import config
+from .ca import CaGrid
+
+
+# ---------------------------------------------------------------------------
+# Location helpers (re-exported for the app layer)
+# ---------------------------------------------------------------------------
+
+
+def loc_to_cell(lat: float, lon: float) -> Tuple[int, int]:
+    """Map a WGS84 lat/lon to the demo grid cell (row, col).
+
+    Returns (row, col) where row increases southward and col increases eastward.
+    Raises ValueError if the location is outside the demo bounding box.
+    """
+    min_lon, min_lat, max_lon, max_lat = config.bounding_box()
+    d_lon = config.grid_spacing_deg()
+    d_lat = config.grid_spacing_deg()
+
+    if not (min_lon <= lon <= max_lon and min_lat <= lat <= max_lat):
+        raise ValueError(
+            f"Location ({lat:.4f}, {lon:.4f}) is outside the demo bounding box "
+            f"({min_lon}, {min_lat}) -> ({max_lon}, {max_lat})."
+        )
+
+    col = int((lon - min_lon) / d_lon)
+    row = int((max_lat - lat) / d_lat)
+
+    n_rows = max(1, (max_lat - min_lat) / d_lat)
+    n_cols = max(1, (max_lon - min_lon) / d_lon)
+
+    row = min(row, int(n_rows) - 1)
+    col = min(col, int(n_cols) - 1)
+
+    return (row, col)
+
+
+def cell_center_lat_lon(row: int, col: int) -> Tuple[float, float]:
+    """Return the center lat/lon of a grid cell."""
+    min_lon, min_lat, max_lon, max_lat = config.bounding_box()
+    d_lon = config.grid_spacing_deg()
+    d_lat = config.grid_spacing_deg()
+
+    lon = min_lon + (col + 0.5) * d_lon
+    lat = max_lat - (row + 0.5) * d_lat
+    return (lat, lon)
+
+
+def cells_within_radius(
+    center_row: int,
+    center_col: int,
+    radius_cells: int,
+    n_rows: int,
+    n_cols: int,
+) -> List[Tuple[int, int]]:
+    """Return all cell (row, col) within radius_cells of the center cell."""
+    out: List[Tuple[int, int]] = []
+    r0 = max(0, center_row - radius_cells)
+    r1 = min(n_rows - 1, center_row + radius_cells)
+    c0 = max(0, center_col - radius_cells)
+    c1 = min(n_cols - 1, center_col + radius_cells)
+
+    for r in range(r0, r1 + 1):
+        for c in range(c0, c1 + 1):
+            d = float(((r - center_row) ** 2 + (c - center_col) ** 2) ** 0.5)
+            if d <= float(radius_cells):
+                out.append((r, c))
+
+    return out
 
 
 # ---------------------------------------------------------------------------

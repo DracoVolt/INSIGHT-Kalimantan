@@ -1,14 +1,15 @@
-.PHONY: help setup install lint test clean data notebooks app figures
+.PHONY: help setup install lint test clean data notebooks app figures train
 
 PYTHON := .venv/bin/python
 PIP := .venv/bin/pip
 
 help:
-	@echo "IGNIS-Sim Kalimantan — common commands"
+	@echo "INSIGHT Kalimantan — common commands"
 	@echo ""
 	@echo "  make setup       Create venv and install dependencies"
 	@echo "  make install     Install dependencies into existing venv"
 	@echo "  make data        Download/prepare raw data for the demo bounding box"
+	@echo "  make train       Train the Random Forest risk model from a FIRMS CSV"
 	@echo "  make notebooks   Open the exploration notebooks (note: opens in browser)"
 	@echo "  make app         Run the demo web app"
 	@echo "  make figures     Regenerate demo figures if scripts exist"
@@ -41,6 +42,9 @@ notebooks:
 
 app:
 	$(PYTHON) -m app.main
+
+train:
+	$(PYTHON) -m src.train --firms data/raw/MODIS_C6_1_Global_7d.csv
 
 figures:
 	@echo "No figure generation scripts configured yet."

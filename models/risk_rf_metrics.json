@@ -1,0 +1,13 @@
+{
+  "accuracy": 0.9747324613555292,
+  "precision": 0.4426229508196721,
+  "recall": 0.1656441717791411,
+  "roc_auc": 0.8831982207187212,
+  "average_precision": 0.2834882381611078,
+  "split_mode": "temporal",
+  "n_test_days": 2.0,
+  "n_train_rows": 20184.0,
+  "n_test_rows": 6728.0,
+  "n_test_positives": 163.0,
+  "positive_rate": 0.032439060642092746
+}

@@ -31,6 +31,7 @@ FEATURE_NAMES: Tuple[str, ...] = (
     "cell_col",
     "distance_to_nearest_water_cell",
     "distance_to_nearest_settlement_cell",
+    "distance_to_nearest_hotspot_cell",
     "peat_risk_flag",
     "has_hotspot_last_1_day",
     "has_hotspot_last_3_days",
@@ -73,8 +74,109 @@ def _day_offset_iso(base_iso: str, offset_days: int) -> str:
     return dt.strftime("%Y-%m-%d")
 
 
-def _euclidean_distance(row1: int, col1: int, row2: int, col2: int) -> float:
-    return float(((row1 - row2) ** 2 + (col1 - col2) ** 2) ** 0.5)
+# ---------------------------------------------------------------------------
+# Nearest-feature distance (exact, vectorized)
+# ---------------------------------------------------------------------------
+#
+# For every cell we need the Euclidean distance (in cells) to the nearest cell
+# whose mask is True (nearest water / settlement). The naive double loop costs
+# O(n_rows * n_cols) *per query*, which dominates the feature-table build once
+# there are many cells x many days (minutes for real multi-day FIRMS data).
+#
+# Instead we use an exact Euclidean distance transform (EDT): one separable
+# pass per axis computes the distance for ALL cells at once in
+# O(n_rows * n_cols). See Felzenszwalb & Huttenlocher, "Distance Transforms of
+# Sampled Functions" (2012) for the lower-envelope algorithm used in 1D.
+
+
+def _edt_1d(f: np.ndarray) -> np.ndarray:
+    """Exact 1D squared Euclidean distance transform.
+
+    Computes d[q] = min_p ((q - p)**2 + f[p]) via the lower envelope of
+    parabolas in O(len(f)). f must be finite everywhere.
+    """
+    n = int(f.shape[0])
+    d = np.empty(n, dtype=float)
+    v = np.zeros(n, dtype=int)       # parabola sites in the lower envelope
+    z = np.empty(n + 1, dtype=float)  # boundary positions between parabolas
+    k = 0
+    v[0] = 0
+    z[0] = -np.inf
+    z[1] = np.inf
+    for q in range(1, n):
+        fq = f[q] + q * q
+        while True:
+            vk = v[k]
+            s = (fq - (f[vk] + vk * vk)) / (2.0 * (q - vk))
+            if s > z[k]:
+                break
+            k -= 1
+        k += 1
+        v[k] = q
+        z[k] = s
+        z[k + 1] = np.inf
+    k = 0
+    for q in range(n):
+        while z[k + 1] < q:
+            k += 1
+        d[q] = (q - v[k]) ** 2 + f[v[k]]
+    return d
+
+
+def _squared_edt_2d(mask: np.ndarray) -> np.ndarray:
+    """Exact squared Euclidean distance transform of a boolean 2D mask.
+
+    Pass 1 (columns): squared distance to the nearest True cell in the same
+    column, vectorized over all columns with two sequential sweeps.
+    Pass 2 (rows): the general 1D transform per row combines columns.
+    """
+    mask = np.asarray(mask, dtype=bool)
+    n_rows, n_cols = mask.shape
+
+    g = np.where(mask, 0.0, np.inf)
+
+    # Nearest True cell at or above (swept downward, vectorized over columns).
+    above = np.full(n_cols, -1, dtype=int)
+    for i in range(n_rows):
+        above = np.where(mask[i], i, above)
+        gap = i - above
+        g[i] = np.minimum(g[i], np.where(above >= 0, gap * gap, np.inf))
+
+    # Nearest True cell at or below (swept upward).
+    below = np.full(n_cols, n_rows, dtype=int)
+    for i in range(n_rows - 1, -1, -1):
+        below = np.where(mask[i], i, below)
+        gap = below - i
+        g[i] = np.minimum(g[i], np.where(below < n_rows, gap * gap, np.inf))
+
+    # Columns with no True cell at all stay +inf; replace them with a value
+    # larger than any real squared distance so the 1D pass stays finite but
+    # those columns can never win the minimum.
+    big = float((n_rows + n_cols) ** 2 + 1)
+    g = np.where(np.isfinite(g), g, big)
+
+    out = np.empty_like(g)
+    for i in range(n_rows):
+        out[i] = _edt_1d(g[i])
+    return out
+
+
+def nearest_feature_distance(mask: np.ndarray) -> np.ndarray:
+    """Distance in cells from every cell to the nearest True cell.
+
+    Exact Euclidean distance, computed for the whole grid in
+    O(n_rows * n_cols) with a separable distance transform instead of the
+    previous brute-force double scan per query.
+
+    If the mask contains no True cells, every entry is n_rows + n_cols (the
+    demo's "very far" sentinel, matching the previous behavior).
+    """
+    mask = np.asarray(mask, dtype=bool)
+    if mask.size == 0:
+        return np.zeros(mask.shape, dtype=float)
+    if not mask.any():
+        return np.full(mask.shape, float(mask.shape[0] + mask.shape[1]))
+    return np.sqrt(_squared_edt_2d(mask))
 
 
 # ---------------------------------------------------------------------------
@@ -92,30 +194,17 @@ class ContextMap:
     is_settlement: np.ndarray
     is_peat_risk: np.ndarray
 
+    def __post_init__(self) -> None:
+        # Precompute exact nearest-feature distances once (vectorized) so
+        # per-cell lookups during feature-table building are O(1).
+        self._water_dist = nearest_feature_distance(self.is_water)
+        self._settlement_dist = nearest_feature_distance(self.is_settlement)
+
     def nearest_water_distance(self, row: int, col: int) -> float:
-        return self._nearest_distance(row, col, self.is_water)
+        return float(self._water_dist[row, col])
 
     def nearest_settlement_distance(self, row: int, col: int) -> float:
-        return self._nearest_distance(row, col, self.is_settlement)
-
-    def _nearest_distance(
-        self, row: int, col: int, mask: np.ndarray
-    ) -> float:
-        """Nearest Manhattan-ish cell distance to any True cell in mask.
-
-        For the demo, we use Euclidean cell distance. This is fast and easy to
-        explain.
-        """
-        best = np.inf
-        for r in range(self.n_rows):
-            for c in range(self.n_cols):
-                if mask[r, c]:
-                    d = _euclidean_distance(row, col, r, c)
-                    if d < best:
-                        best = d
-        if np.isinf(best):
-            return float(self.n_rows + self.n_cols)
-        return best
+        return float(self._settlement_dist[row, col])
 
 
 def build_context_map(
@@ -198,22 +287,99 @@ def hotspot_history_for_cell(
     cell_grid: CellGrid,
     days: List[str],
     cell_day_labels: Dict[Tuple[int, int, str], int],
+    target_day: Optional[str] = None,
 ) -> Dict[str, float]:
-    """Compute hotspot-history features for one cell across the given days."""
-    counts: Dict[str, int] = {}
-    for day_iso in days:
-        counts[day_iso] = cell_day_labels.get((row, col, day_iso), 0)
+    """Compute hotspot-history features for one cell, for one target day.
 
-    out: Dict[str, float] = {}
-    out["has_hotspot_last_1_day"] = float(
-        int(counts.get(days[0], 0)) if days else 0
-    )
-    last3 = sum(counts.get(_day_offset_iso(days[0], -k), 0) for k in range(0, 3))
-    out["has_hotspot_last_3_days"] = float(min(last3, 1))
-    last7 = sum(counts.get(_day_offset_iso(days[0], -k), 0) for k in range(0, 7))
-    out["has_hotspot_last_7_days"] = float(min(last7, 1))
-    out["hotspot_count_last_7_days"] = float(last7)
-    return out
+    History covers the days *before* ``target_day`` only (D-1, D-3, D-7). The
+    target day itself is never included, otherwise ``has_hotspot_last_1_day``
+    would equal the label and the model would learn nothing but a copy rule.
+    """
+    if target_day is None:
+        target_day = days[-1] if days else None
+
+    if target_day is None:
+        return {
+            "has_hotspot_last_1_day": 0.0,
+            "has_hotspot_last_3_days": 0.0,
+            "has_hotspot_last_7_days": 0.0,
+            "hotspot_count_last_7_days": 0.0,
+        }
+
+    def count_on(offset_days: int) -> int:
+        day = _day_offset_iso(target_day, offset_days)
+        return int(cell_day_labels.get((row, col, day), 0))
+
+    last3 = sum(count_on(-k) for k in (1, 2, 3))
+    last7 = sum(count_on(-k) for k in range(1, 8))
+
+    return {
+        "has_hotspot_last_1_day": float(count_on(-1)),
+        "has_hotspot_last_3_days": float(min(last3, 1)),
+        "has_hotspot_last_7_days": float(min(last7, 1)),
+        "hotspot_count_last_7_days": float(last7),
+    }
+
+
+def recent_hotspot_arrays(
+    dataset: FireDataset,
+    target_day: Optional[str] = None,
+) -> Dict[str, np.ndarray]:
+    """Per-cell hotspot-history features for one target day.
+
+    This is the inference-time counterpart of the history columns in
+    `build_feature_table`: same definitions, same convention that a feature for
+    day D only looks at days before D. ``target_day`` defaults to the day after
+    the last observed FIRMS day, so the map answers "where will fire occur next
+    given what burned up to now" rather than "where did it burn".
+
+    Returns one (n_rows, n_cols) array per history feature name.
+    """
+    cell_grid = dataset.cell_grid
+    shape = (cell_grid.n_rows, cell_grid.n_cols)
+    far = float(cell_grid.n_rows + cell_grid.n_cols)
+
+    if target_day is None:
+        if dataset.labeled_days:
+            last_day = dataset.labeled_days[-1]
+            if not isinstance(last_day, str):
+                last_day = last_day.strftime("%Y-%m-%d")
+            target_day = _day_offset_iso(last_day, 1)
+
+    arrays: Dict[str, np.ndarray] = {
+        "has_hotspot_last_1_day": np.zeros(shape, dtype=float),
+        "has_hotspot_last_3_days": np.zeros(shape, dtype=float),
+        "has_hotspot_last_7_days": np.zeros(shape, dtype=float),
+        "hotspot_count_last_7_days": np.zeros(shape, dtype=float),
+        "distance_to_nearest_hotspot_cell": np.full(shape, far, dtype=float),
+    }
+    if target_day is None:
+        return arrays
+
+    days = dataset.labeled_days
+    for row, col in cell_grid.iter_cells():
+        history = hotspot_history_for_cell(
+            dataset.hotspots, row, col, cell_grid, days, dataset.labels,
+            target_day=target_day,
+        )
+        for name in (
+            "has_hotspot_last_1_day",
+            "has_hotspot_last_3_days",
+            "has_hotspot_last_7_days",
+            "hotspot_count_last_7_days",
+        ):
+            arrays[name][row, col] = history[name]
+
+    # Distance to the nearest hotspot on the day before the target day (the
+    # same definition used for training).
+    prev_day = _day_offset_iso(target_day, -1)
+    mask = np.zeros(shape, dtype=bool)
+    for (r, c, day_iso), value in dataset.labels.items():
+        if value and day_iso == prev_day and 0 <= r < shape[0] and 0 <= c < shape[1]:
+            mask[r, c] = True
+    if mask.any():
+        arrays["distance_to_nearest_hotspot_cell"] = nearest_feature_distance(mask)
+    return arrays
 
 
 # ---------------------------------------------------------------------------
@@ -230,8 +396,9 @@ def wind_alignment(
 ) -> float:
     """Compute a wind-alignment feature for a cell relative to the grid center.
 
-    The feature is the cosine of the angle between the wind direction and the
-    direction from the grid center to the cell, clipped to [0, 1].
+    The feature is 1 - |bearing difference| / 180, clipped to [0, 1]: 1 for a
+    cell directly downwind of the grid center, 0.5 perpendicular, 0 upwind.
+    ``wind_dir_deg`` is meteorological (the direction the wind comes FROM).
 
     This is a teaching feature, not a meteorological calculation.
     """
@@ -247,13 +414,14 @@ def wind_alignment(
     if dr == 0 and dc == 0:
         return 0.0
 
-    # cell-to-center bearing (clockwise from north)
-    bearing = float(np.degrees(np.arctan2(dc, dr)))
+    # cell-to-center bearing (clockwise from north); row increases southward.
+    bearing = float(np.degrees(np.arctan2(dc, -dr)))
     if bearing < 0:
         bearing += 360.0
 
-    wind_dir = wind_dir_deg % 360.0
-    diff = abs(bearing - wind_dir)
+    # Meteorological convention: wind_dir_deg is where the wind comes FROM.
+    downwind = (wind_dir_deg + 180.0) % 360.0
+    diff = abs(bearing - downwind)
     if diff > 180.0:
         diff = 360.0 - diff
 
@@ -285,13 +453,34 @@ def build_feature_table(
     days = dataset.labeled_days
     labels = dataset.labels
 
+    # Distance to the nearest hotspot on the previous day, per target day.
+    # Fires cluster, so this is usually the strongest single predictor; it is
+    # computed once per day with the exact Euclidean distance transform.
+    positives_by_day: Dict[str, List[Tuple[int, int]]] = {}
+    for (r, c, day_iso), value in labels.items():
+        if value:
+            positives_by_day.setdefault(day_iso, []).append((r, c))
+
+    shape = (cell_grid.n_rows, cell_grid.n_cols)
+    far = float(cell_grid.n_rows + cell_grid.n_cols)
+    hotspot_distance: Dict[str, np.ndarray] = {}
+    for day_iso in days:
+        prev_day = _day_offset_iso(day_iso, -1)
+        mask = np.zeros(shape, dtype=bool)
+        for r, c in positives_by_day.get(prev_day, []):
+            if 0 <= r < shape[0] and 0 <= c < shape[1]:
+                mask[r, c] = True
+        hotspot_distance[day_iso] = (
+            nearest_feature_distance(mask) if mask.any() else np.full(shape, far)
+        )
+
     rows: List[FeatureRow] = []
     for row, col in cell_grid.iter_cells():
         center_lon, center_lat = cell_grid.row_col_to_center(row, col)
-        history = hotspot_history_for_cell(
-            dataset.hotspots, row, col, cell_grid, days, labels
-        )
         for day_iso in days:
+            history = hotspot_history_for_cell(
+                dataset.hotspots, row, col, cell_grid, days, labels, target_day=day_iso
+            )
             feats: Dict[str, float] = {
                 "cell_row": float(row),
                 "cell_col": float(col),
@@ -300,6 +489,9 @@ def build_feature_table(
                 ),
                 "distance_to_nearest_settlement_cell": float(
                     context_map.nearest_settlement_distance(row, col)
+                ),
+                "distance_to_nearest_hotspot_cell": float(
+                    hotspot_distance[day_iso][row, col]
                 ),
                 "peat_risk_flag": float(context_map.is_peat_risk[row, col]),
                 "has_hotspot_last_1_day": history["has_hotspot_last_1_day"],

@@ -1,4 +1,4 @@
-"""FIRMS hotspot loading and labeling for IGNIS-Sim.
+"""FIRMS hotspot loading and labeling for INSIGHT.
 
 This module provides a small, explainable way to turn NASA FIRMS hotspot data
 into per-cell labels for the demo bounding box.
@@ -67,11 +67,15 @@ class CellGrid:
     n_cols: int
 
     def cell_bounds(self, row: int, col: int) -> Tuple[float, float, float, float]:
-        """Return (min_lon, min_lat, max_lon, max_lat) for a cell."""
+        """Return (min_lon, min_lat, max_lon, max_lat) for a cell.
+
+        Row 0 is the northernmost row so that row indices increase southward,
+        matching the CA's bearing convention and the app's map overlays.
+        """
         west = self.min_lon + col * self.spacing_deg
         east = west + self.spacing_deg
-        south = self.min_lat + row * self.spacing_deg
-        north = south + self.spacing_deg
+        north = self.max_lat - row * self.spacing_deg
+        south = north - self.spacing_deg
         return (west, south, east, north)
 
     def lon_lat_to_row_col(self, lon: float, lat: float) -> Tuple[int, int]:
@@ -79,7 +83,7 @@ class CellGrid:
         if not (self.min_lon <= lon <= self.max_lon and self.min_lat <= lat <= self.max_lat):
             raise ValueError(f"Point ({lon}, {lat}) is outside the grid bounds.")
         col = int((lon - self.min_lon) / self.spacing_deg)
-        row = int((lat - self.min_lat) / self.spacing_deg)
+        row = int((self.max_lat - lat) / self.spacing_deg)
         col = max(0, min(self.n_cols - 1, col))
         row = max(0, min(self.n_rows - 1, row))
         return (row, col)
@@ -87,7 +91,7 @@ class CellGrid:
     def row_col_to_center(self, row: int, col: int) -> Tuple[float, float]:
         """Return the (lon, lat) center of a cell."""
         lon = self.min_lon + (col + 0.5) * self.spacing_deg
-        lat = self.min_lat + (row + 0.5) * self.spacing_deg
+        lat = self.max_lat - (row + 0.5) * self.spacing_deg
         return (lon, lat)
 
     def iter_cells(self):

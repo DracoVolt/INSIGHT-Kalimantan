@@ -1,1 +1,1 @@
-"""IGNIS-Sim Kalimantan tests."""
+"""INSIGHT Kalimantan tests."""

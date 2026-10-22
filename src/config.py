@@ -1,4 +1,4 @@
-"""Configuration for IGNIS-Sim Kalimantan.
+"""Configuration for INSIGHT Kalimantan.
 
 The demo bounding box is centered near Palangkaraya / Sebangau / Kahayan
 peatland forest in Central Kalimantan, roughly 2 degrees longitude by 2 degrees
@@ -48,17 +48,40 @@ def figures_dir() -> Path:
 #
 # Palangkaraya is at approx 2.22 S, 113.90 E. The Sebangau and Kahayan
 # peatland forests lie roughly between 112.5-114.5 E and 1.5-3.5 S.
-# A 2 deg x 2 deg box centered here is about 222 km x 222 km; the grid
+# A ~2 deg x 2 deg box centered here is about 222 km x 222 km; the grid
 # resolution (~0.035 deg) gives ~4 km cells.
 _MIN_LON: float = 112.5
 _MIN_LAT: float = -3.5
 _MAX_LON: float = 114.5
 _MAX_LAT: float = -1.5
 
+# Cell grid aspect ratio (cols / rows). 1.0 keeps the demo square; larger
+# values make the map wider (rectangle) so a sidebar can sit to the right
+# without wasting vertical space.
+_GRID_ASPECT: float = 1.6
+
+# ---------------------------------------------------------------------------
+# Kalimantan-wide map (expanded fire-risk view)
+# ---------------------------------------------------------------------------
+
+# Whole-of-Kalimantan bounding box (Borneo's Indonesian portion):
+# approx 108.8E-119.1E, 4.2S-7.3N. Used only for the coarse Kalimantan-wide
+# risk map; the CA demo still runs on the small Palangka Raya box above.
+KALIMANTAN_BBOX: Tuple[float, float, float, float] = (108.8, -4.2, 119.1, 7.3)
+
+# Coarse spacing for the Kalimantan-wide risk map (~16 km per cell) so the
+# whole island renders quickly in the browser.
+KALIMANTAN_SPACING_DEG: float = 0.15
+
 
 def bounding_box() -> Tuple[float, float, float, float]:
     """Return (min_lon, min_lat, max_lon, max_lat) as a tuple."""
     return (_MIN_LON, _MIN_LAT, _MAX_LON, _MAX_LAT)
+
+
+def grid_aspect() -> float:
+    """Aspect ratio for the demo grid (cols / rows)."""
+    return _GRID_ASPECT
 
 
 # ---------------------------------------------------------------------------
@@ -84,15 +107,32 @@ def grid_spacing_deg() -> float:
     return _GRID_SPACING_DEG
 
 
+def grid_dims() -> Tuple[int, int]:
+    """Return (n_rows, n_cols) for the demo grid given the bounding box.
+
+    The box is split into equal steps of _GRID_SPACING_DEG; n_cols is scaled
+    by _GRID_ASPECT so the resulting raster can be a rectangle instead of a
+    square.
+    """
+    from math import ceil
+
+    min_lon, min_lat, max_lon, max_lat = bounding_box()
+    d = grid_spacing_deg()
+
+    n_rows = max(1, ceil((max_lat - min_lat) / d))
+    n_cols_base = max(1, ceil((max_lon - min_lon) / d))
+    n_cols = max(1, ceil(n_cols_base * grid_aspect()))
+
+    return (n_rows, n_cols)
+
+
 def cell_size_description() -> str:
     """Return a short human-readable description of the cell size."""
-    approx_lat_m = _GRID_SPACING_DEG * _M_PER_DEG_LAT
-    approx_lon_m = _GRID_SPACING_DEG * _M_PER_DEG_LAT * (
-        1.0 / (1.0 + 0.0)  # rough; real longitude scaling depends on latitude
-    )
+    cell_km_lat = _GRID_SPACING_DEG * _M_PER_DEG_LAT / 1000.0
+    cell_km_lon = _GRID_SPACING_DEG * _M_PER_DEG_LON / 1000.0
     return (
         f"Grid spacing: {_GRID_SPACING_DEG} degrees (about "
-        f"{approx_lat_m:.0f} m north-south)."
+        f"{cell_km_lat:.1f} km north-south, {cell_km_lon:.1f} km east-west)."
     )
 
 
@@ -217,6 +257,25 @@ ML_HOTSPOT_HISTORY_DAYS: int = 7
 
 def ml_random_state() -> int:
     return ML_RANDOM_STATE
+
+
+# Trained model artifacts (written by ``python -m src.train``).
+_MODELS_DIR = _PROJECT_ROOT / "models"
+MODEL_FILENAME: str = "risk_rf.joblib"
+MODEL_METRICS_FILENAME: str = "risk_rf_metrics.json"
+
+
+def models_dir() -> Path:
+    _MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    return _MODELS_DIR
+
+
+def model_path() -> Path:
+    return _MODELS_DIR / MODEL_FILENAME
+
+
+def model_metrics_path() -> Path:
+    return _MODELS_DIR / MODEL_METRICS_FILENAME
 
 
 # ---------------------------------------------------------------------------
