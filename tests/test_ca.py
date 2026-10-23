@@ -134,6 +134,30 @@ def test_peat_risk_cell_state():
     assert bool(grid.peat_risk[1, 1]) is False
 
 
+def test_peat_risk_cells_can_burn():
+    peat = np.zeros((3, 3), dtype=bool)
+    peat[0, 0] = True
+    grid = CaGrid().initialize(n_rows=3, n_cols=3, peat_risk_mask=peat)
+
+    # PEAT_RISK is a pre-fire label, not a protected state: it must ignite.
+    assert grid.is_burnable(0, 0) is True
+    seed_cell(grid, 0, 0)
+    params = CaParams(wind_dir_deg=0, random_seed=1)
+    grid = step(grid, params=params)
+    assert grid.state_at(0, 0) == CELLState.BURNED
+
+
+def test_peat_risk_survives_clone():
+    peat = np.zeros((2, 2), dtype=bool)
+    peat[1, 0] = True
+    grid = CaGrid().initialize(n_rows=2, n_cols=2, peat_risk_mask=peat)
+
+    clone = grid.clone()
+
+    assert bool(clone.peat_risk[1, 0]) is True
+    assert clone.state_at(1, 0) == CELLState.PEAT_RISK
+
+
 def test_wind_alignment_factor_directionality():
     center_row = 1.0
     center_col = 1.0

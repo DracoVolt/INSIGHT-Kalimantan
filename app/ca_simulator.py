@@ -251,10 +251,15 @@ def initialize_simulation(
     # Every inland cell carries fire; the OSM water mask is the barrier, so a
     # river or lake cuts the fire front instead of burning like forest. Settled
     # and peat cells stay burnable, they are just reported to mitigation.
+    burnable = ~context_map.is_water
     grid = CaGrid().initialize(
         cell_grid.n_rows,
         cell_grid.n_cols,
-        burnable_mask=~context_map.is_water,
+        burnable_mask=burnable,
+        # OSM peat/wetland cells start as PEAT_RISK and get the extra
+        # CA_PEAT_INFLUENCE spread term; water cells are left out so a river is
+        # never labelled as peat.
+        peat_risk_mask=context_map.is_peat_risk & burnable,
     )
 
     seeded = 0
