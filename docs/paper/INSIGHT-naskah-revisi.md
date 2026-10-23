@@ -18,7 +18,7 @@ Tanggal: 21 Oktober 2026
 
 ## ABSTRAK
 
-Kebakaran hutan dan lahan di ekosistem gambut tropis Indonesia merupakan bencana ekologis berulang yang dipicu oleh kerentanan bahan bakar organik kering terhadap perambatan api permukaan (*surface fire*). Keterbatasan sistem pemodelan yang dirancang khusus untuk topografi dan kondisi termodinamika gambut menyulitkan upaya mitigasi dini yang akurat di lapangan. Proyek ini bertujuan merumuskan model probabilistik hibrida, membangun perangkat lunak simulasi interaktif berbasis web yang dilengkapi prediksi sebaran api dan pemetaan flora-fauna endemik, serta memproyeksikan lintasan penyebaran api secara kuasi-*real-time* untuk menekan dampak kerusakan lingkungan. Berlandaskan konsep fisika komputasi melalui prinsip perpindahan panas dan dinamika angin, proyek ini menawarkan INSIGHT (*Integrated Surface Ignition & Flora Fauna Mapping Hazard Tracker*) sebagai sistem pendukung keputusan yang terintegrasi dengan analisis spasial sebaran flora dan fauna endemik Kalimantan yang terancam punah. Metode pengembangan menerapkan algoritma transisi ruang-waktu berbasis *Cellular Automata* (CA) pada grid 58 × 58 sel berukuran 0,035° (≈ 3,9 km) yang mencakup wilayah Palangka Raya, Taman Nasional Sebangau, dan Daerah Aliran Sungai Kahayan, serta mengintegrasikan data OpenStreetMap, NASA FIRMS, dan iNaturalist. Setiap langkah CA menyulut sel tetangga dengan probabilitas 0,15–0,60 yang bergantung pada keselarasan arah angin dan status risiko gambut, sehingga terbentuk batas depan api yang anisotropik. Lapisan *Random Forest* dengan 200 pohon dan 11 fitur prediktor—termasuk riwayat titik panas 1–7 hari dan jarak ke titik panas hari sebelumnya—menyediakan peta risiko per sel yang dapat dijelaskan (ROC-AUC 0,883 pada pembagian temporal); apabila berkas model atau data FIRMS belum tersedia, sistem secara otomatis memakai baseline heuristik transparan agar simulasi tetap berjalan. Luaran yang diharapkan adalah prototipe perangkat lunak simulasi interaktif yang dapat memproyeksikan risiko kebakaran sekaligus memandu prioritas evakuasi habitat satwa dan perlindungan lahan gambut secara berkelanjutan.
+Kebakaran hutan dan lahan di ekosistem gambut tropis Indonesia merupakan bencana ekologis berulang yang dipicu oleh kerentanan bahan bakar organik kering terhadap perambatan api permukaan (*surface fire*). Keterbatasan sistem pemodelan yang dirancang khusus untuk topografi dan kondisi termodinamika gambut menyulitkan upaya mitigasi dini yang akurat di lapangan. Proyek ini bertujuan merumuskan model probabilistik hibrida, membangun perangkat lunak simulasi interaktif berbasis web yang dilengkapi prediksi sebaran api dan pemetaan flora-fauna endemik, serta memproyeksikan lintasan penyebaran api secara kuasi-*real-time* untuk menekan dampak kerusakan lingkungan. Berlandaskan konsep fisika komputasi melalui prinsip perpindahan panas dan dinamika angin, proyek ini menawarkan INSIGHT (*Integrated Surface Ignition & Flora Fauna Mapping Hazard Tracker*) sebagai sistem pendukung keputusan yang terintegrasi dengan analisis spasial sebaran flora dan fauna endemik Kalimantan yang terancam punah. Metode pengembangan menerapkan algoritma transisi ruang-waktu berbasis *Cellular Automata* (CA) pada grid 58 × 58 sel berukuran 0,035° (≈ 3,9 km) yang mencakup wilayah Palangka Raya, Taman Nasional Sebangau, dan Daerah Aliran Sungai Kahayan, serta mengintegrasikan data OpenStreetMap, NASA FIRMS, dan iNaturalist. Setiap langkah CA menyulut sel tetangga dengan probabilitas 0,15–0,60 yang bergantung pada keselarasan arah angin dan status risiko gambut, sehingga terbentuk batas depan api yang anisotropik. Lapisan *Random Forest* dengan 200 pohon dan 11 fitur prediktor—termasuk riwayat titik panas 1–7 hari dan jarak ke titik panas hari sebelumnya—menyediakan peta risiko per sel yang dapat dijelaskan (ROC-AUC 0,883 dan PR-AUC 0,283 pada pembagian temporal); apabila berkas model atau data FIRMS belum tersedia, sistem secara otomatis memakai baseline heuristik transparan agar simulasi tetap berjalan. Luaran yang diharapkan adalah prototipe perangkat lunak simulasi interaktif yang dapat memproyeksikan risiko kebakaran sekaligus memandu prioritas evakuasi habitat satwa dan perlindungan lahan gambut secara berkelanjutan.
 
 **Kata kunci:** *Cellular Automata*, *Machine Learning*, Pemodelan Termodinamika, Simulasi Mitigasi, *Surface Fire*.
 
@@ -50,7 +50,7 @@ Selama ini, upaya penanggulangan dan pemantauan karhutla umumnya masih bergantun
 
 Kontribusi utama penelitian ini adalah sistem pendukung keputusan operasional yang mengintegrasikan pemodelan komputasi fisika dengan analisis spasial ekologis untuk memproyeksikan area terdampak sekaligus memandu prioritas evakuasi habitat satwa. Kebaruan INSIGHT terletak pada arsitektur hibrida yang menyatukan aturan transisi probabilistik berbasis *Cellular Automata* dengan lapisan risiko *Machine Learning* dan indeks kerentanan ekologis dalam satu platform web yang ringan dan interaktif.
 
-Berbeda dari platform GIS konvensional yang statis, INSIGHT menjawab tema kompetisi "Physics for Future Solutions" dengan menggeser paradigma mitigasi karhutla dari pemantauan titik panas menuju proyeksi lintasan api dan perlindungan ekologis yang berkelanjutan. Seluruh parameter model dinyatakan terbuka dalam satu berkas konfigurasi, sehingga setiap angka pada simulasi dapat ditelusuri dan direproduksi.
+Berbeda dari platform GIS konvensional yang statis, INSIGHT menjawab tema kompetisi "Physics for Future Solutions" dengan menggeser paradigma mitigasi karhutla dari pemantauan titik panas menuju proyeksi lintasan api dan perlindungan ekologis yang berkelanjutan. Seluruh parameter model dinyatakan terbuka dalam satu berkas konfigurasi, sehingga setiap angka dalam simulasi dapat ditelusuri dan direproduksi. Lapisan *Machine Learning* bukan hiasan: peta risiko pada kotak demo adalah keluaran model yang dilatih pada titik panas NASA FIRMS nyata, dan antarmuka selalu mencantumkan sumber serta metrik model tersebut.
 
 ---
 
@@ -121,6 +121,7 @@ Setiap sel memiliki satu status: `healthy` (sehat), `igniting` (mulai menyala), 
 - Aturan 2 (penyulutan): tetangga *N* dari sel yang sedang menyala (`burning` atau `igniting`) dan berstatus `healthy` atau `peat_risk` berubah menjadi `igniting` dengan probabilitas P(S→N).
 - Aturan 3 (bahan bakar): sel berstatus `burned` tidak dapat terbakar lagi, sehingga api tidak dapat masuk kembali.
 - Aturan 4 (batas domain): penyulutan hanya terjadi di dalam grid; sel di luar batas wilayah tidak diikutkan.
+- Aturan 5 (air): sel yang ditandai air oleh mask OpenStreetMap tidak dapat terbakar, sehingga sungai dan danau memotong batas depan api. Seluruh sel daratan lain — termasuk permukiman dan sel `peat_risk` — tetap dapat terbakar, dan titik panas yang jatuh di sel air tidak dipakai sebagai benih.
 
 Penarikan penyulutan bersifat uji Bernoulli independen: untuk setiap pasangan sel–tetangga, bilangan acak seragam u ~ U(0,1) dibangkitkan dan penyulutan berhasil bila u < P(S→N).
 
@@ -141,12 +142,12 @@ Hukum Stefan–Boltzmann (P_rad = εσAT⁴) menjadi landasan konseptual untuk s
 Klasifikasi *Random Forest* dilatih menggunakan fitur spasial publik per sel:
 
 - **Fitur prediktor (11 kolom):** `cell_row`, `cell_col`, jarak ke sel air terdekat, jarak ke sel permukiman terdekat, jarak ke titik panas terdekat hari sebelumnya, penanda risiko gambut, keberadaan titik panas 1 hari terakhir, 3 hari terakhir, dan 7 hari terakhir, jumlah titik panas 7 hari terakhir, serta keselarasan angin. Kolom `lon` dan `lat` tetap ada di tabel fitur untuk keperluan pemetaan, tetapi tidak dipakai melatih model karena keduanya hanya mengodekan posisi grid.
-- **Label:** apakah sel tersebut berisi titik panas FIRMS terkonfirmasi pada hari itu (1) atau tidak (0). Seluruh fitur riwayat dihitung **hanya dari hari-hari sebelum hari label** (D−1 sampai D−7); hari label itu sendiri tidak pernah masuk, sehingga model tidak dapat menyalin label.
-- **Model:** `RandomForestClassifier` dengan 200 pohon, kedalaman maksimum 8, tanpa pembobotan kelas, dan `random_state = 42`. Pembobotan kelas seimbang diuji dan justru menurunkan kinerja pada pembagian temporal (ROC-AUC 0,863 vs 0,883; PR-AUC 0,222 vs 0,283), sekaligus menaikkan rata-rata probabilitas prediksi menjadi 0,24 padahal laju positif teramati 0,024.
-- **Pembagian data:** temporal, bukan acak. Delapan hari pengamatan dibagi menjadi 6 hari latih dan 2 hari uji (20.184 baris latih, 6.728 baris uji, 163 positif uji). Pembagian acak per baris akan menempatkan sel yang sama di kedua sisi dan menggelembungkan metrik.
+- **Label:** apakah sel tersebut berisi titik panas FIRMS terkonfirmasi pada hari itu (1) atau tidak (0). Seluruh fitur riwayat dihitung **hanya dari hari-hari sebelum hari label** (D−1 sampai D−7); hari label itu sendiri tidak pernah masuk, sehingga model tidak dapat menyalin label. Aturan ini diuji secara eksplisit: sel yang terbakar pada hari D harus bernilai 0 pada fitur riwayat hari D.
+- **Model:** `RandomForestClassifier` dengan 200 pohon, kedalaman maksimum 8, tanpa pembobotan kelas, dan `random_state = 42`. Pembobotan kelas seimbang diuji dan justru menurunkan kinerja pada pembagian temporal (ROC-AUC 0,863 vs 0,883; PR-AUC 0,222 vs 0,283), sekaligus menaikkan rata-rata probabilitas prediksi menjadi 0,24 padahal laju positif teramati 0,032.
+- **Pembagian data:** temporal, bukan acak. Delapan hari pengamatan dibagi menjadi 6 hari latih dan 2 hari uji (20.184 baris latih, 6.728 baris uji, 163 positif uji). Pembagian acak per baris akan menempatkan sel yang sama di kedua sisi dan menggelembungkan metrik, karena sebagian sel terbakar berulang.
 - **Metrik evaluasi:** akurasi, presisi, *recall*, ROC-AUC, dan *average precision* (PR-AUC).
 - **Output:** r(cell), yaitu probabilitas prediksi kebakaran per sel pada hari berikutnya.
-- **Pelatihan dan penyimpanan:** `python -m src.train --firms data/raw/MODIS_C6_1_Global_7d.csv` menulis `models/risk_rf.joblib` dan `models/risk_rf_metrics.json`. Aplikasi memuat kedua berkas itu saat inisialisasi; bila berkas tidak ada, aplikasi memakai baseline heuristik dan menampilkan sumber peta risiko di panel samping.
+- **Pelatihan dan penyimpanan:** `python -m src.train --firms data/raw/MODIS_C6_1_Global_7d.csv` menulis `models/risk_rf.joblib` dan `models/risk_rf_metrics.json`. Aplikasi memuat kedua berkas itu saat inisialisasi; bila berkas atau pustaka tidak tersedia, aplikasi memakai baseline heuristik dan menampilkan sumber peta risiko di panel samping.
 
 Jarak ke air dan permukiman dihitung dengan *Euclidean distance transform* eksak (algoritma Felzenszwalb–Huttenlocher [4]) sehingga seluruh grid diproses dalam O(N), bukan O(N²) per kueri. Hal ini penting karena tabel fitur tumbuh sebanding dengan jumlah sel dikali jumlah hari.
 
@@ -158,11 +159,13 @@ Apabila model terlatih belum tersedia, `predict_risk_map` memakai baseline heuri
 
 r(cell) = 0,05 + 0,25 · keselarasan angin + 0,15 · penanda gambut + 0,10 · kedekatan permukiman − 0,08 · kedekatan air,
 
-dengan hasil dibatasi pada [0; 0,95]. Baseline ini memungkinkan antarmuka dan modul mitigasi diuji tanpa bergantung pada ketersediaan data latih.
+dengan hasil dibatasi pada [0; 1]. Baseline ini memungkinkan antarmuka dan modul mitigasi diuji tanpa bergantung pada ketersediaan data latih.
 
 ### 2.6 Peta risiko skala Kalimantan
 
-Selain kotak demo, aplikasi menampilkan peta risiko seluruh Kalimantan pada grid kasar 0,15° (≈ 16,6 km per sel), mencakup 108,8°–119,1° BT dan 4,2° LS–7,3° LU. Peta ini memakai heuristik fisika (keselarasan angin, pita gambut, dan kedalaman *inland*) yang dihitung secara vektorisasi NumPy, sehingga seluruh pulau dapat dirender dalam milidetik. Berbeda dari peta kotak demo yang memakai *Random Forest* terlatih, peta pulau **bukan** keluaran model: fitur OSM dan FIRMS per sel hanya tersedia di kotak demo. Peta ini karenanya bersifat indikatif, tidak menjalankan CA, dan diberi label eksplisit pada antarmuka. Lingkaran risiko hanya digambar pada sel yang pusatnya berada di daratan, memakai garis pantai Natural Earth 1:50m yang disederhanakan dan disimpan di `assets/geo/kalimantan_land.geojson`; dari 5.313 sel pada kotak pembatas, 2.688 di antaranya berada di darat, sehingga Laut Jawa, Selat Karimata, dan Laut Cina Selatan tidak dipenuhi titik yang tidak memiliki bahan bakar.
+Selain kotak demo, aplikasi menampilkan peta risiko seluruh Kalimantan pada grid kasar 0,15° (≈ 16,6 km per sel), mencakup 108,8°–119,1° BT dan 4,2° LS–7,3° LU. Peta ini memakai heuristik fisika (keselarasan angin, pita gambut, dan kedalaman *inland*) yang dihitung secara vektorisasi NumPy, sehingga seluruh pulau dapat dirender dalam milidetik. Berbeda dari peta kotak demo yang memakai *Random Forest* terlatih, peta pulau **bukan** keluaran model: fitur OSM dan FIRMS per sel hanya tersedia di kotak demo. Peta ini karenanya bersifat indikatif, tidak menjalankan CA, dan diberi label eksplisit pada antarmuka.
+
+Lingkaran risiko hanya digambar pada sel yang pusatnya berada di daratan, memakai garis pantai Natural Earth 1:50m [12] yang disederhanakan dan disimpan di `assets/geo/kalimantan_land.geojson`. Dari 5.313 sel pada kotak pembatas, 2.688 di antaranya berada di darat, sehingga Laut Jawa, Selat Karimata, dan Laut Cina Selatan tidak dipenuhi titik yang tidak memiliki bahan bakar. Mask ini dihitung sekali saat peta dirender dan diperbarui dengan perintah `python -m src.land_mask build`.
 
 ### 2.7 Aturan jarak peringatan mitigasi
 
@@ -196,15 +199,16 @@ Proyek ini merupakan penelitian komputasi tanpa perangkat keras khusus, sehingga
 | --- | --- | --- |
 | Bahasa pemrograman | Python 3.10+ | Implementasi seluruh model dan antarmuka |
 | Engine fisika CA | NumPy, pandas | Aturan transisi CA dan perhitungan matriks probabilitas |
-| Model ML | scikit-learn | Pelatihan *Random Forest* dan evaluasi metrik |
+| Model ML | scikit-learn, joblib | Pelatihan *Random Forest*, evaluasi metrik, penyimpanan model |
 | Data geospasial | Overpass API (OpenStreetMap), NASA FIRMS, iNaturalist API v2 | Konteks lahan, titik panas, sebaran flora-fauna |
+| Garis pantai | Natural Earth 1:50m (domain publik) | Mask daratan pada peta risiko pulau |
 | Visualisasi peta | Folium, streamlit-folium | Peta interaktif, layer grid, dan penanda flora-fauna |
 | Antarmuka web | Streamlit | Dasbor, kontrol simulasi, panel mitigasi, unggah ikon |
-| Pengujian | pytest | Uji unit CA, fitur, mitigasi, ikon, dan asap integrasi |
+| Pengujian | pytest | Uji unit CA, fitur, ML, mitigasi, ikon, mask daratan, dan asap integrasi |
 
 Tabel 1. Spesifikasi komponen perangkat lunak dan fungsinya.
 
-Perangkat lunak pendukung lain: `urllib` untuk akses API, `joblib` untuk penyimpanan model, serta `base64` dan `mimetypes` untuk menyematkan berkas ikon sebagai data URI.
+Perangkat lunak pendukung lain: `urllib` untuk akses API, `shapely` untuk uji titik-dalam-poligon pada mask daratan, serta `base64` dan `mimetypes` untuk menyematkan berkas ikon sebagai data URI.
 
 ### 3.2 Metode Penelitian atau Perancangan
 
@@ -214,11 +218,11 @@ Metode yang digunakan adalah **pemodelan dan simulasi komputasi** yang dipadukan
 
 Alur kerja sistem:
 
-1. **Akuisisi data** — Overpass API mengambil fitur air, jalan, permukiman, dan penutup lahan; NASA FIRMS menyediakan titik panas; iNaturalist API v2 menyediakan observasi flora-fauna dalam kotak Kalimantan.
+1. **Akuisisi data** — Overpass API mengambil fitur air, permukiman, dan lahan gambut; NASA FIRMS menyediakan titik panas; iNaturalist API v2 menyediakan observasi flora-fauna dalam kotak Kalimantan.
 2. **Praproses** — data titik dipetakan ke sel grid 58 × 58; dibangun peta konteks air, permukiman, dan risiko gambut; dihitung jarak eksak ke fitur terdekat.
 3. **Pelatihan model** — tabel fitur per sel per hari dibangun dari ekspor FIRMS, lalu *Random Forest* dilatih, dievaluasi pada dua hari terakhir (pembagian temporal), dan disimpan ke `models/` bersama metriknya.
 4. **Simulasi CA** — sel dibenihkan dari titik panas (atau sel pusat), lalu aturan transisi dijalankan sejumlah langkah yang dipilih pengguna.
-5. **Penyajian** — peta sebaran biodiversitas, peta risiko Kalimantan, panel mitigasi, dan panel darurat dirender di Streamlit.
+5. **Penyajian** — peta sebaran biodiversitas, peta risiko kotak demo hasil model, peta risiko Kalimantan, panel mitigasi, dan panel darurat dirender di Streamlit.
 6. **Evaluasi** — uji unit dan uji antarmuka dijalankan; parameter disesuaikan bila perilaku model tidak sesuai.
 
 ### 3.4 Tahapan Penelitian
@@ -229,9 +233,10 @@ Tahap awal meliputi analisis kebutuhan dan identifikasi masalah karhutla di ekos
 
 | Sumber Data | Format | Fungsi dalam Sistem |
 | --- | --- | --- |
-| OpenStreetMap | Overpass API (ODbL) | Layer sungai/badan air, jalan, permukiman, dan fitur jarak |
+| OpenStreetMap | Overpass API (ODbL) | Layer sungai/badan air, permukiman, lahan gambut, dan fitur jarak |
 | NASA FIRMS | MODIS/VIIRS (CSV) | Titik panas aktif sebagai label pelatihan ML dan pembenihan CA |
 | iNaturalist | API v2 (lisensi CC per observasi) | Titik observasi flora-fauna endemik yang terancam punah |
+| Natural Earth | GeoJSON 1:50m (domain publik) | Garis pantai untuk mask daratan peta pulau |
 
 Tabel 2. Spesifikasi sumber data dan fungsinya dalam sistem.
 
@@ -241,7 +246,7 @@ Tahap perancangan berfokus pada formulasi matematis model dan arsitektur transis
 
 #### 3.4.3 Development
 
-Tahap ini menerjemahkan rancangan menjadi kode Python. Struktur repositori memisahkan model (`src/ca.py`, `src/ml.py`, `src/features.py`), data (`src/osm.py`, `src/fire_data.py`, `src/bio_loader.py`), logika mitigasi (`src/mitigation.py`), registri ikon (`src/icons.py`), dan antarmuka (`app/main.py`). Seluruh konstanta fisika dan ML ditempatkan pada `src/config.py`.
+Tahap ini menerjemahkan rancangan menjadi kode Python. Struktur repositori memisahkan model (`src/ca.py`, `src/ml.py`, `src/features.py`), pelatihan (`src/train.py`), data (`src/osm.py`, `src/fire_data.py`, `src/bio_loader.py`), peta (`src/land_mask.py`), logika mitigasi (`src/mitigation.py`), registri ikon (`src/icons.py`), dan antarmuka (`app/main.py`). Seluruh konstanta fisika dan ML ditempatkan pada `src/config.py`, sedangkan artefak model disimpan di `models/`.
 
 #### 3.4.4 Implementation
 
@@ -254,7 +259,7 @@ Prototipe diimplementasikan dan diuji secara bertahap melalui empat tingkatan:
 
 #### 3.4.5 Evaluation
 
-Hasil pengujian dievaluasi secara iteratif. Kinerja model ML diukur dengan akurasi, presisi, *recall*, dan ROC-AUC. Umpan balik dari pengujian digunakan untuk mengoptimalkan kecepatan komputasi serta menyempurnakan tampilan dasbor hingga dihasilkan prototipe yang stabil, akurat, dan intuitif.
+Hasil pengujian dievaluasi secara iteratif. Kinerja model ML diukur dengan akurasi, presisi, *recall*, ROC-AUC, dan PR-AUC. Umpan balik dari pengujian digunakan untuk mengoptimalkan kecepatan komputasi serta menyempurnakan tampilan dasbor hingga dihasilkan prototipe yang stabil, akurat, dan intuitif.
 
 ---
 
@@ -262,15 +267,16 @@ Hasil pengujian dievaluasi secara iteratif. Kinerja model ML diukur dengan akura
 
 ### 4.1 Hasil Perancangan dan Pengembangan Prototipe
 
-Prototipe INSIGHT berupa aplikasi web Streamlit yang menampilkan tiga lapisan utama:
+Prototipe INSIGHT berupa aplikasi web Streamlit yang menampilkan empat lapisan utama:
 
 1. **Peta sebaran flora-fauna** — titik observasi iNaturalist untuk Orangutan Kalimantan (*Pongo pygmaeus*), Bekantan (*Nasalis larvatus*), Rafflesia, dan Nepenthes, difilter ke wilayah Kalimantan dan ditampilkan dengan ikon khusus.
-2. **Peta risiko kebakaran Kalimantan** — permukaan risiko kasar 0,15° (≈ 16,6 km per sel) yang dihitung dengan heuristik fisika yang sama seperti model demo.
-3. **Panel darurat dan mitigasi** — kolom kedua di sisi kanan berisi lokasi pengguna, ringkasan hotspot terdekat, dan kartu panduan mitigasi per sel.
+2. **Peta risiko kotak demo** — probabilitas *Random Forest* per sel untuk hari setelah pengamatan FIRMS terakhir, dengan keterangan sumber, ROC-AUC, PR-AUC, dan tanggal kondisi riwayat titik panas.
+3. **Peta risiko skala Kalimantan** — permukaan risiko kasar 0,15° (≈ 16,6 km per sel) dari heuristik fisika, digambar hanya pada sel daratan.
+4. **Panel darurat dan mitigasi** — kolom kedua di sisi kanan berisi lokasi pengguna, ringkasan hotspot terdekat, dan kartu panduan mitigasi per sel.
 
 Grid demo memiliki 58 × 58 sel dengan ukuran 3,885 km (utara–selatan) × 3,881 km (timur–barat). Setiap sel menyimpan status CA, penanda risiko gambut, dan intensitas pembakaran. Simulasi default berjalan 12 langkah dan dapat diubah pengguna pada rentang 1–20 langkah.
 
-Ikon flora-fauna dapat diganti pengguna tanpa mengubah kode: berkas gambar diletakkan di folder `assets/icons/` dengan nama sesuai kunci takson (`orangutan`, `proboscis-monkey`, `rafflesia`, `nepenthes`, atau `default`), mendukung format PNG, WEBP, JPG, dan SVG. Registri ikon memilih format dengan prioritas PNG > WEBP > JPG > SVG dan menyematkan gambar sebagai data URI sehingga peta tetap berfungsi tanpa server aset terpisah.
+Ikon flora-fauna dapat diganti pengguna tanpa mengubah kode: berkas gambar diletakkan di folder `assets/icons/` dengan nama sesuai kunci takson (`orangutan`, `proboscis-monkey`, `rafflesia`, `nepenthes`, atau `default`), mendukung format PNG, WEBP, JPG/JPEG, dan SVG. Registri ikon memilih format dengan prioritas PNG > WEBP > JPG/JPEG > SVG dan menyematkan gambar sebagai data URI sehingga peta tetap berfungsi tanpa server aset terpisah.
 
 ### 4.2 Pengujian dan Evaluasi Kinerja
 
@@ -287,19 +293,21 @@ Tabel 3. Hasil uji sensitivitas arah angin (12 langkah, 40 benih, satu sel pusat
 
 Pada keempat arah, sentroid dan persentil 90 bergeser positif searah hembusan angin, sedangkan persentil 10 tetap negatif. Artinya, batas depan api memang anisotropik: penyebaran ke arah hembusan angin mencapai 5,7–6,6 sel (≈ 22–26 km) setelah 12 langkah, sedangkan sisi berlawanan angin tertinggal 1,6–3,8 sel. Sel terbakar mencakup 2,8–3,2% dari 3.364 sel. Variasi antarbenih cukup besar karena setiap penyulutan bersifat stokastik; karena itu kesimpulan diambil dari kecenderungan statistik, bukan dari satu lintasan tunggal.
 
-**b. Uji kinerja komputasi.** Satu langkah CA pada grid 58 × 58 memerlukan waktu di bawah 2 milidetik; 12 langkah selesai dalam ≈ 0,014 detik pada mesin pengujian tim. Kebutuhan komputasi didominasi oleh pengambilan data jaringan (Overpass dan iNaturalist), bukan oleh CA. Karena itu, hasil inisialisasi disimpan dengan cache `st.cache_resource`: pembaruan slider atau panel tidak lagi mengulang pengambilan data, dan hanya tombol "Run simulation" yang memuat ulang.
+**b. Uji kinerja komputasi.** Satu langkah CA pada grid 58 × 58 memerlukan waktu di bawah 2 milidetik; 12 langkah selesai dalam ≈ 0,014 detik pada mesin pengujian tim. Inferensi *Random Forest* untuk seluruh 3.364 sel memerlukan ≈ 0,5 detik melalui salinan NumPy dari hutan model. Kebutuhan komputasi didominasi oleh pengambilan data jaringan (Overpass dan iNaturalist), bukan oleh CA atau model. Karena itu, hasil inisialisasi disimpan dengan cache `st.cache_resource`: pembaruan slider atau panel tidak lagi mengulang pengambilan data, dan hanya tombol "Run simulation" yang memuat ulang.
 
 **c. Uji integrasi data dan konvensi grid.** Koordinat lintang/bujur dipetakan ke sel dengan baris 0 di tepi utara dan indeks baris bertambah ke selatan. Uji unit memverifikasi bahwa pusat sel dapat dipetakan balik ke indeks yang sama, sehingga hotspot FIRMS, lokasi pengguna, dan overlay peta berada pada sel yang konsisten.
 
-**d. Uji kinerja model ML.** Ekspor MODIS 7 hari (66.482 baris) disaring ke kotak demo menjadi 1.770 titik panas pada 8 hari, lalu menghasilkan 20.184 baris latih dan 6.728 baris uji (163 positif uji; laju positif 3,2%). Pada dua hari uji yang tidak pernah dilihat model, akurasi 0,975, presisi 0,443, *recall* 0,166 (ambang 0,5), ROC-AUC 0,883, dan PR-AUC 0,283. PR-AUC jauh di atas laju positif menunjukkan model memberi peringkat yang berarti pada kelas minoritas, meskipun *recall* pada ambang 0,5 rendah—karena itu antarmuka menampilkan peta probabilitas bergradasi, bukan keputusan biner. Fitur terpenting adalah jarak ke titik panas hari sebelumnya (0,167), riwayat 3 hari (0,138), posisi baris (0,119), keselarasan angin (0,116), dan jumlah titik panas 7 hari (0,108). Pada peta kotak demo, 23 sel (0,7%) melewati probabilitas 0,5 dan nilai tertinggi 0,76.
+**d. Uji kinerja model ML.** Ekspor MODIS 7 hari (66.482 baris) disaring ke kotak demo menjadi 1.770 titik panas pada 8 hari, lalu menghasilkan 20.184 baris latih dan 6.728 baris uji (163 positif uji; laju positif 3,2%). Pada dua hari uji yang tidak pernah dilihat model, akurasi 0,975, presisi 0,443, *recall* 0,166 (ambang 0,5), ROC-AUC 0,883, dan PR-AUC 0,283. PR-AUC hampir sembilan kali laju positif menunjukkan model memberi peringkat yang berarti pada kelas minoritas, meskipun *recall* pada ambang 0,5 rendah—karena itu antarmuka menampilkan peta probabilitas bergradasi, bukan keputusan biner. Fitur terpenting adalah jarak ke titik panas hari sebelumnya (0,167), riwayat 3 hari (0,138), posisi baris (0,119), keselarasan angin (0,116), dan jumlah titik panas 7 hari (0,108).
 
-**e. Uji perangkat lunak.** Rangkaian uji `pytest` mencakup 56 pengujian pada modul CA, fitur, ML, mitigasi, ikon, dan asap integrasi, seluruhnya lulus dalam ≈ 11 detik. Pengujian mencakup batas probabilitas 0,15–0,60, arah keselarasan angin (searah hembusan bernilai 1, berlawanan 0, tegak lurus 0,5), ketetanggan Moore, sifat bahan bakar yang tidak dapat terbakar ulang, akurasi jarak *distance transform*, kebocoran label pada fitur riwayat, penyimpanan dan pemuatan model, serta pemetaan ikon dan fallback ke `default`.
+Pada peta kotak demo, 23 sel (0,7%) melewati probabilitas 0,5 dengan nilai tertinggi 0,76, dan rata-rata probabilitas 0,036—hampir sama dengan laju positif teramati 3,2%, sehingga peta dapat dibaca sebagai probabilitas, bukan sekadar peringkat. Setelah pemeriksaan kebocoran label dan penggunaan pembagian temporal, angka-angka ini lebih rendah daripada versi awal prototipe, tetapi merupakan estimasi yang jujur untuk data yang tidak pernah dilihat model.
 
-**f. Uji antarmuka.** Pada viewport 1600 px, kolom peta berukuran 671 px dan panel darurat 270 px; ketika panel dimatikan, peta melebar menjadi 973 px. Pemeriksaan di browser menunjukkan seluruh ubin peta dimuat dari `tile.openstreetmap.org` dan menutup penuh area peta tanpa celah. Waktu muat pertama bergantung pada pengambilan iNaturalist dan, bila cache OSM sudah kedaluwarsa (7 hari), Overpass; dengan cache tersedia inisialisasi selesai dalam hitungan detik.
+**e. Uji perangkat lunak.** Rangkaian uji `pytest` mencakup 69 pengujian pada modul CA, fitur, ML, mitigasi, ikon, mask daratan, dan asap integrasi, seluruhnya lulus dalam ≈ 15 detik. Pengujian mencakup batas probabilitas 0,15–0,60, arah keselarasan angin (searah hembusan bernilai 1, berlawanan 0, tegak lurus 0,5), ketetanggan Moore, sifat bahan bakar yang tidak dapat terbakar ulang, sel air yang tidak pernah menyala meski peluang penyulutan diset 1, sel `peat_risk` yang tetap dapat terbakar, akurasi jarak *distance transform*, kebocoran label pada fitur riwayat, kesesuaian fitur riwayat saat inferensi, penolakan model usang, kesesuaian keluaran salinan NumPy dengan scikit-learn, penyimpanan dan pemuatan model, mask daratan peta pulau, serta pemetaan ikon dan fallback ke `default`.
+
+**f. Uji antarmuka.** Pada viewport 1600 px, kolom peta berukuran 671 px dan panel darurat 270 px; ketika panel dimatikan, peta melebar menjadi 973 px. Pemeriksaan di browser menunjukkan seluruh ubin peta dimuat dari `tile.openstreetmap.org` dan menutup penuh area peta tanpa celah. Waktu muat pertama bergantung pada pengambilan iNaturalist dan, bila cache OSM sudah kedaluwarsa (7 hari), Overpass; dengan cache tersedia inisialisasi selesai dalam hitungan detik. Rendering dasbor lengkap dengan dua peta terverifikasi tanpa pengecualian melalui pengujian Streamlit.
 
 ### 4.3 Analisis Kelayakan Implementasi
 
-**Teknis.** Seluruh komponen berjalan di browser melalui Streamlit dan Folium, tanpa server GPU dan tanpa basis data. Model CA sangat ringan, sedangkan beban terbesar adalah ketersediaan jaringan dan kuota API publik. Ketergantungan pada Overpass API dan iNaturalist dapat digantikan data luring (stub) yang telah disediakan, sehingga demonstrasi tetap berjalan di lokasi tanpa internet.
+**Teknis.** Seluruh komponen berjalan di browser melalui Streamlit dan Folium, tanpa server GPU dan tanpa basis data. Model CA sangat ringan, sedangkan beban terbesar adalah ketersediaan jaringan dan kuota API publik. Ketergantungan pada Overpass API dan iNaturalist dapat digantikan data luring (stub) yang telah disediakan, sehingga demonstrasi tetap berjalan di lokasi tanpa internet; model terlatih dan subset titik panas juga disertakan di repositori.
 
 **Ekonomi.** Perangkat lunak yang digunakan bersifat *open source* dan data yang dipakai bersifat publik, sehingga biaya pengadaan mendekati nol. Biaya operasional utama adalah koneksi internet dan waktu pemeliharaan.
 
@@ -316,9 +324,9 @@ Pengembangan lanjutan yang paling bernilai adalah kalibrasi waktu langkah terhad
 ### 4.5 Keterbatasan
 
 1. **Waktu langkah belum terkalibrasi.** Satu langkah CA adalah satu iterasi pembaruan, bukan satuan waktu fisik. Klaim laju penyebaran karena itu bersifat relatif, bukan km/jam.
-2. **Air belum menjadi penghalang api.** Sel air dipakai sebagai fitur jarak dan dikeluarkan dari daftar area pedesaan, tetapi belum dijadikan sel tak-terbakar pada bidang CA.
-3. **Demo bergantung pada artefak model lokal.** Model terlatih (`models/risk_rf.joblib`, ≈ 4 MB) dan ekspor FIRMS (`data/raw/firms_hotspots.csv`) tidak ikut dalam repositori. Bila model tidak ada, aplikasi otomatis memakai baseline heuristik dan menyatakan sumbernya di panel samping. Bila berkas FIRMS tidak ada, model tetap dipakai tetapi fitur riwayat bernilai nol, sehingga peta menjadi prediksi "tanpa titik panas terbaru".
-4. **Peta Kalimantan bersifat indikatif.** Peta pulau memakai grid kasar dan heuristik, bukan CA atau model terlatih.
+2. **Air hanya dimodelkan sebagai penghalang geometris.** Sel air dari mask OpenStreetMap tidak dapat terbakar sehingga sungai dan danau memotong batas depan api, tetapi kelembapan bahan bakar, penguapan, dan hambatan hidrologis lain belum dimodelkan, dan mask gambut dibangun dari titik pusat fitur OSM sehingga poligon gambut besar hanya terwakili satu sel.
+3. **Model adalah potret satu jendela data.** Model terlatih (`models/risk_rf.joblib`, ≈ 4 MB) dan subset FIRMS (`data/raw/firms_hotspots.csv`, 138 KB) disertakan di repositori agar aplikasi langsung memakai prediksi model, tetapi keduanya membekukan ekspor 7 hari pada Oktober 2026. Untuk musim baru, jalankan `python -m src.train` dengan ekspor terbaru. Bila model tidak dapat dimuat, aplikasi otomatis memakai baseline heuristik dan menyatakan sumbernya di panel samping; bila berkas FIRMS tidak ada, fitur riwayat bernilai nol sehingga peta menjadi prediksi "tanpa titik panas terbaru".
+4. **Peta Kalimantan bersifat indikatif.** Peta pulau memakai grid kasar dan heuristik, bukan CA atau model terlatih. Mask daratan hanya menghapus sel laut, bukan menggantikan model per sel.
 5. **Tanpa GPS.** Lokasi pengguna dimasukkan manual; integrasi geolokasi peramban berada di luar cakupan versi ini.
 6. **Belum ada validasi terhadap perimeter kebakaran nyata.** Akurasi spasial model belum diukur terhadap data satelit historis.
 
@@ -327,10 +335,11 @@ Pengembangan lanjutan yang paling bernilai adalah kalibrasi waktu langkah terhad
 ## 5. KESIMPULAN
 
 1. Model probabilistik hibrida berhasil dirumuskan: aturan transisi CA dengan probabilitas 0,15–0,60 yang bergantung pada keselarasan angin dan status gambut menghasilkan batas depan api anisotropik, dengan penyebaran searah hembusan angin mencapai 5,7–6,6 sel setelah 12 langkah pada grid 58 × 58.
-2. Prototipe perangkat lunak INSIGHT berhasil dibangun sebagai aplikasi web interaktif yang menyajikan peta sebaran flora-fauna endemik, peta risiko kebakaran, panel mitigasi, dan panel darurat dalam satu dasbor, dengan seluruh ubin peta tertutup penuh dan parameter simulasi dapat diubah pengguna.
-3. Sistem pendukung keputusan berhasil diwujudkan pada tingkat prototipe: panduan mitigasi dipicu oleh jarak 2 sel (≈ 7,8 km) ke permukiman dan 3 sel (≈ 11,7 km) ke area pedesaan, serta dapat difokuskan pada lokasi pengguna.
-4. Penerapan konsep fisika tampak pada pemetaan konveksi ke suku angin, radiasi ke probabilitas dasar, dan konduksi yang digabungkan pada skala sel, sehingga model tetap dapat dijelaskan sekaligus ringan dihitung.
-5. Keterbatasan utama—kalibrasi waktu, penghalang air, dan validasi terhadap data kebakaran nyata—menjadi agenda pengembangan berikutnya.
+2. Prototipe perangkat lunak INSIGHT berhasil dibangun sebagai aplikasi web interaktif yang menyajikan peta sebaran flora-fauna endemik, peta risiko kotak demo hasil *Random Forest*, peta risiko Kalimantan, panel mitigasi, dan panel darurat dalam satu dasbor.
+3. Lapisan *Machine Learning* terbukti dapat dipakai, bukan sekadar dirancang: dilatih pada 1.770 titik panas FIRMS nyata dan dievaluasi pada dua hari yang tidak pernah dilihat model, model mencapai ROC-AUC 0,883 dan PR-AUC 0,283, lalu memuat dirinya saat aplikasi dijalankan dan mengondisikan peta pada hari terakhir pengamatan.
+4. Sistem pendukung keputusan berhasil diwujudkan pada tingkat prototipe: panduan mitigasi dipicu oleh jarak 2 sel (≈ 7,8 km) ke permukiman dan 3 sel (≈ 11,7 km) ke area pedesaan, serta dapat difokuskan pada lokasi pengguna.
+5. Penerapan konsep fisika tampak pada pemetaan konveksi ke suku angin, radiasi ke probabilitas dasar, dan konduksi yang digabungkan pada skala sel, sehingga model tetap dapat dijelaskan sekaligus ringan dihitung.
+6. Keterbatasan utama—kalibrasi waktu, penghalang air, dan validasi terhadap data kebakaran nyata—menjadi agenda pengembangan berikutnya.
 
 ---
 
@@ -358,6 +367,8 @@ Pengembangan lanjutan yang paling bernilai adalah kalibrasi waktu langkah terhad
 
 [11] Folium, *Folium Documentation*, https://python-visualization.github.io/folium/, (21 Oktober 2026).
 
+[12] Natural Earth, *1:50m Land*, https://www.naturalearthdata.com/downloads/50m-physical-vectors/, (domain publik, 21 Oktober 2026).
+
 ---
 
 ## 7. LAMPIRAN
@@ -380,7 +391,7 @@ Proyek ini tidak memerlukan pengadaan perangkat keras maupun lisensi perangkat l
 | --- | --- | --- | --- | --- |
 | 1 | Perangkat lunak (Python, Streamlit, Folium, scikit-learn) | — | 0 (open source) | 0 |
 | 2 | Perangkat keras (laptop pribadi) | 3 | 0 (milik sendiri) | 0 |
-| 3 | Data geospasial publik (OSM, FIRMS, iNaturalist) | — | 0 (akses publik) | 0 |
+| 3 | Data geospasial publik (OSM, FIRMS, iNaturalist, Natural Earth) | — | 0 (akses publik) | 0 |
 | **Total** | | | | **Rp 0** |
 
 Tabel 5. Rincian kebutuhan biaya.
@@ -391,11 +402,14 @@ Kode simulasi tersedia di repositori proyek dengan struktur:
 
 - `src/config.py` — seluruh konstanta wilayah, CA, ML, dan ambang mitigasi;
 - `src/ca.py` — grid, aturan transisi, pembenihan, dan penjelasan langkah;
-- `src/features.py` — tabel fitur dan *distance transform*;
+- `src/features.py` — tabel fitur, riwayat titik panas, dan *distance transform*;
 - `src/ml.py` — pelatihan *Random Forest*, metrik, dan peta risiko;
+- `src/train.py` — CLI pelatihan dari ekspor FIRMS;
+- `src/land_mask.py` — mask daratan peta pulau dan pembangun garis pantai;
 - `src/mitigation.py` — aturan jarak dan panduan mitigasi;
 - `src/icons.py` — registri ikon flora-fauna yang dapat diganti pengguna;
+- `app/ca_simulator.py` — orkestrasi data, CA, model, dan mitigasi;
 - `app/main.py` — antarmuka Streamlit dan peta Folium;
-- `tests/` — 56 pengujian unit dan asap (`pytest`).
+- `tests/` — 69 pengujian unit dan asap (`pytest`).
 
-Berkas data mentah diletakkan di `data/raw/` (misalnya `firms_hotspots.csv`), sedangkan ikon kustom diletakkan di `assets/icons/`.
+Berkas data mentah berukuran besar diletakkan di `data/raw/` dan tidak disertakan dalam repositori, sedangkan subset FIRMS yang dipakai aplikasi (`data/raw/firms_hotspots.csv`), model terlatih (`models/`), ikon kustom (`assets/icons/`), dan garis pantai (`assets/geo/`) disertakan agar aplikasi dapat dijalankan tanpa pelatihan ulang.
