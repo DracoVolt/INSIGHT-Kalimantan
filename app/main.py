@@ -16,6 +16,14 @@ try:
 except Exception:
     STREAMLIT_AVAILABLE = False
 
+# Streamlit Community Cloud runs the ``streamlit`` executable, which puts only
+# ``app/`` on sys.path. Add the repository root so ``import src`` and
+# ``import app`` resolve there too, as well as under
+# ``python -m streamlit run app/main.py``.
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
+
 from src import config
 from src.bio_loader import BioLayer, load_all_bio_layers
 from src.ca import CaGrid, CaParams, run_simulation, CellState
