@@ -25,6 +25,8 @@ _env/
 data/raw/*
 !data/raw/firms_hotspots.csv
 data/processed/
+# Rebuildable runtime caches (OSM masks, iNaturalist snapshots)
+data/cache/
 demos/
 figures/
 .ipynb_checkpoints/
@@ -35,3 +37,6 @@ htmlcov/
 .DS_Store
 Thumbs.db
 env.example
+# Local secrets and tooling scratch
+.env
+.freebuff/
