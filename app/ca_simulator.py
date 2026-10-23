@@ -106,6 +106,20 @@ def _context_cache_key(cell_grid: Any) -> str:
     )
 
 
+def _nearest_burnable_cell(grid: CaGrid, cell_grid: Any) -> Tuple[int, int]:
+    """Return the burnable cell closest to the grid centre."""
+    center_row = cell_grid.n_rows // 2
+    center_col = cell_grid.n_cols // 2
+    if grid.is_burnable(center_row, center_col):
+        return center_row, center_col
+    rows, cols = np.nonzero(grid.burnable)
+    if rows.size == 0:
+        return center_row, center_col
+    distance = (rows - center_row) ** 2 + (cols - center_col) ** 2
+    best = int(np.argmin(distance))
+    return int(rows[best]), int(cols[best])
+
+
 def _static_inputs(use_hotspots: bool) -> Dict[str, Any]:
     """Load the wind-independent half of a simulation state."""
     cell_grid = build_cell_grid()
@@ -233,7 +247,15 @@ def initialize_simulation(
     cell_grid = static["cell_grid"]
     context_map = static["context_map"]
     dataset = static["dataset"]
-    grid = CaGrid().initialize(cell_grid.n_rows, cell_grid.n_cols)
+
+    # Every inland cell carries fire; the OSM water mask is the barrier, so a
+    # river or lake cuts the fire front instead of burning like forest. Settled
+    # and peat cells stay burnable, they are just reported to mitigation.
+    grid = CaGrid().initialize(
+        cell_grid.n_rows,
+        cell_grid.n_cols,
+        burnable_mask=~context_map.is_water,
+    )
 
     seeded = 0
     if use_hotspots and dataset is not None:
@@ -243,8 +265,9 @@ def initialize_simulation(
             seeded = 0
 
     if seeded == 0:
-        center_row = cell_grid.n_rows // 2
-        center_col = cell_grid.n_cols // 2
+        # The box centre can sit on a river, which no longer ignites, so fall
+        # back to the inland cell nearest to it.
+        center_row, center_col = _nearest_burnable_cell(grid, cell_grid)
         seed_cell(grid, center_row, center_col, CELLState.BURNING)
         seeded = 1
 

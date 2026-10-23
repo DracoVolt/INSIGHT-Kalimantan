@@ -70,32 +70,45 @@ class CaGrid:
     burning_intensity: np.ndarray = field(
         default_factory=lambda: np.empty((0, 0), dtype=float)
     )
+    # Cells that can carry fire at all. The app passes the complement of the
+    # OSM water mask, so rivers and lakes cut the fire front instead of burning
+    # like forest; every inland cell stays burnable.
+    burnable: np.ndarray = field(default_factory=lambda: np.empty((0, 0), dtype=bool))
 
     def initialize(
         self,
         n_rows: int,
         n_cols: int,
         peat_risk_mask: Optional[np.ndarray] = None,
+        burnable_mask: Optional[np.ndarray] = None,
     ) -> "CaGrid":
         self.n_rows = n_rows
         self.n_cols = n_cols
         self.states = np.full((n_rows, n_cols), CellState.HEALTHY, dtype=object)
         self.peat_risk = np.zeros((n_rows, n_cols), dtype=bool)
         self.burning_intensity = np.zeros((n_rows, n_cols), dtype=float)
+        if burnable_mask is None:
+            self.burnable = np.ones((n_rows, n_cols), dtype=bool)
+        else:
+            self.burnable = np.asarray(burnable_mask, dtype=bool)
+            if self.burnable.shape != (n_rows, n_cols):
+                raise ValueError(
+                    f"burnable_mask must be {n_rows}x{n_cols}, "
+                    f"got {self.burnable.shape}"
+                )
         if peat_risk_mask is not None:
             self.peat_risk = np.asarray(peat_risk_mask, dtype=bool)
             self.states[peat_risk_mask] = CellState.PEAT_RISK
         return self
 
     def clone(self) -> "CaGrid":
-        import copy
-
         g = CaGrid()
         g.n_rows = self.n_rows
         g.n_cols = self.n_cols
         g.states = self.states.copy()
         g.peat_risk = self.peat_risk.copy()
         g.burning_intensity = self.burning_intensity.copy()
+        g.burnable = self.burnable.copy()
         return g
 
     def set_state(self, row: int, col: int, state: CellState) -> None:
@@ -109,6 +122,8 @@ class CaGrid:
         return self.states[row, col] in (CellState.BURNING, CellState.IGNITING)
 
     def is_burnable(self, row: int, col: int) -> bool:
+        if self.burnable.shape == self.states.shape and not self.burnable[row, col]:
+            return False
         s = self.states[row, col]
         return s in (CellState.HEALTHY, CellState.PEAT_RISK)
 

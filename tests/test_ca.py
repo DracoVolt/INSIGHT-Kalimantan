@@ -86,6 +86,45 @@ def test_run_simulation_produces_frames():
     assert frames[-1].state_at(2, 2) == CELLState.BURNED
 
 
+def test_grid_defaults_to_fully_burnable():
+    grid = CaGrid().initialize(n_rows=3, n_cols=3)
+    assert grid.burnable.shape == (3, 3)
+    assert grid.burnable.all()
+
+
+def test_water_is_a_fire_barrier():
+    burnable = np.ones((3, 3), dtype=bool)
+    burnable[1, 2] = False  # a river cell east of the ignition
+    grid = CaGrid().initialize(n_rows=3, n_cols=3, burnable_mask=burnable)
+    seed_cell(grid, 1, 1)
+    params = CaParams(wind_dir_deg=90, random_seed=7, spread_base=1.0)
+
+    grid = step(grid, params=params)
+
+    # The dry neighbours ignite at spread_base=1.0, the water cell never does.
+    assert grid.state_at(1, 2) == CELLState.HEALTHY
+    assert grid.state_at(1, 0) == CELLState.IGNITING
+    assert not grid.is_burnable(1, 2)
+
+
+def test_burnable_mask_survives_clone():
+    burnable = np.ones((2, 2), dtype=bool)
+    burnable[0, 1] = False
+    grid = CaGrid().initialize(n_rows=2, n_cols=2, burnable_mask=burnable)
+
+    clone = grid.clone()
+    clone.burnable[1, 1] = False
+
+    assert clone.burnable.shape == (2, 2)
+    assert grid.is_burnable(0, 1) is False
+    assert bool(grid.burnable[1, 1]) is True  # the clone has its own copy
+
+
+def test_burnable_mask_shape_is_checked():
+    with pytest.raises(ValueError):
+        CaGrid().initialize(n_rows=3, n_cols=3, burnable_mask=np.ones((2, 2), dtype=bool))
+
+
 def test_peat_risk_cell_state():
     peat = np.zeros((3, 3), dtype=bool)
     peat[0, 0] = True
