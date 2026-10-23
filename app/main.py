@@ -978,13 +978,43 @@ def show_bounding_box_info() -> None:
 # There can be ~1000 context cells, which made the old in-page list enormous.
 EMERGENCY_TILE_LIMIT = 30
 
-def _inject_layout_css(panel_open: bool = True) -> None:
+def _inject_layout_css(panel_open: bool = True, controls_open: bool = True) -> None:
     """Windy-style shell: a full-bleed map with floating glass panels."""
     if not STREAMLIT_AVAILABLE:
         return
     from app._windy_style import inject_layout_css
 
-    inject_layout_css(panel_open=panel_open)
+    inject_layout_css(panel_open=panel_open, controls_open=controls_open)
+
+
+def _toggle_panel_state(state_key: str) -> None:
+    """Flip one fold flag before the next script run (button callback)."""
+    st.session_state[state_key] = not bool(st.session_state.get(state_key, True))
+
+
+def _render_fold_tab(panel: str, is_open: bool) -> None:
+    """Bookmark-shaped tab that folds or restores one floating panel."""
+    if not STREAMLIT_AVAILABLE:
+        return
+
+    if panel == "controls":
+        glyph = "‹" if is_open else "›"
+        state_key = "controls_open"
+        tooltip = "Fold the controls panel" if is_open else "Show the controls panel"
+    else:
+        glyph = "›" if is_open else "‹"
+        state_key = "show_emergency_panel"
+        tooltip = "Fold the emergency panel" if is_open else "Show the emergency panel"
+
+    with st.container(key=f"{panel}_fold_tab"):
+        st.button(
+            glyph,
+            key=f"{panel}_fold_button",
+            help=tooltip,
+            on_click=_toggle_panel_state,
+            args=(state_key,),
+        )
+
 
 # ---------------------------------------------------------------------------
 # Main Streamlit view
@@ -999,7 +1029,18 @@ def run_streamlit() -> None:
         initial_sidebar_state="collapsed",
     )
 
-    _inject_layout_css(panel_open=True)
+    # Fold state lives in session_state so both the CSS and the tab glyphs
+    # follow it across Streamlit's reruns. The emergency flag is also the key
+    # of the "Emergency panel" toggle inside the controls panel, so the toggle
+    # and the right-hand bookmark stay in sync.
+    st.session_state.setdefault("controls_open", True)
+    st.session_state.setdefault("show_emergency_panel", True)
+    controls_open = bool(st.session_state["controls_open"])
+    emergency_open = bool(st.session_state["show_emergency_panel"])
+
+    _inject_layout_css(panel_open=emergency_open, controls_open=controls_open)
+    _render_fold_tab("controls", controls_open)
+    _render_fold_tab("emergency", emergency_open)
 
     # Windy-style left panel: every control floats over the map instead of
     # taking layout space, so the map itself is the page.
@@ -1023,7 +1064,6 @@ def run_streamlit() -> None:
         run_button = st.button("Run simulation", use_container_width=True)
         show_emergency_panel = st.toggle(
             "Emergency panel",
-            value=True,
             help=(
                 "Show your location, nearby hotspots and mitigation guidance in "
                 "the floating panel on the right."
