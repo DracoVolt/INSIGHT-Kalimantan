@@ -24,7 +24,13 @@ from typing import Optional, Sequence
 from src import config
 from src.features import build_context_map
 from src.fire_data import build_cell_grid, build_fire_dataset, load_firms_csv
-from src.ml import feature_importance_table, save_metrics, save_model, train
+from src.ml import (
+    feature_importance_table,
+    save_forest_arrays,
+    save_metrics,
+    save_model,
+    train,
+)
 
 
 def _export_demo_subset(df, min_confidence: float = 50.0) -> Path:
@@ -121,8 +127,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     save_model(model, model_path)
     save_metrics(metrics, metrics_path)
 
+    # The app loads this numpy copy, which keeps scikit-learn (and scipy) out of
+    # the page-load import path.
+    arrays_path = save_forest_arrays(model, model_path.with_suffix(".npz"))
+
     print(f"\nSaved model to {model_path}")
-    print(f"Saved metrics to {metrics_path}\n")
+    print(f"Saved metrics to {metrics_path}")
+    if arrays_path is not None:
+        print(f"Saved numpy forest to {arrays_path}")
+    print()
     for key in ("split_mode", "n_test_days", "n_train_rows", "n_test_rows", "n_test_positives"):
         print(f"  {key}: {metrics[key]}")
     for key in ("accuracy", "precision", "recall", "roc_auc", "average_precision"):

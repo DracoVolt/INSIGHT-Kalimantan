@@ -222,34 +222,53 @@ def actions_for(ctx: MitigationContext) -> List[MitigationAction]:
 # ---------------------------------------------------------------------------
 
 
+def _distance_to_points(
+    rows: np.ndarray,
+    cols: np.ndarray,
+    row: int,
+    col: int,
+    radius: float,
+) -> Optional[float]:
+    """Distance to the closest (rows, cols) pair, or None beyond radius."""
+    if rows.size == 0:
+        return None
+    distances = np.hypot(rows - row, cols - col)
+    within = distances[distances <= radius]
+    return float(within.min()) if within.size else None
+
+
+def _nearest_distance(
+    mask: np.ndarray,
+    row: int,
+    col: int,
+    radius: float,
+) -> Optional[float]:
+    """Distance to the closest True cell, or None when none is within radius."""
+    return _distance_to_points(*np.nonzero(mask), row, col, radius)
+
+
 def nearest_burning_or_igniting_distance(
     grid: "CaGrid",
     row: int,
     col: int,
     max_radius: Optional[int] = None,
 ) -> Tuple[Optional[float], Optional[float]]:
-    """Return (nearest_burning_distance, nearest_igniting_distance) in cell units."""
+    """Return (nearest_burning_distance, nearest_igniting_distance) in cell units.
+
+    Vectorised: a Python double loop over every cell was the single slowest step
+    of a run (~10 s for the demo box), because it was repeated once per
+    settlement and rural cell.
+    """
     from .ca import CellState
 
-    nearest_burning: Optional[float] = None
-    nearest_igniting: Optional[float] = None
     radius = max_radius if max_radius is not None else (grid.n_rows + grid.n_cols)
+    states = np.asarray(grid.states, dtype=object)
+    if states.size == 0:
+        return (None, None)
 
-    for r in range(grid.n_rows):
-        for c in range(grid.n_cols):
-            d = float(((r - row) ** 2 + (c - col) ** 2) ** 0.5)
-            if d > radius:
-                continue
-            state = grid.state_at(r, c)
-            if state in (CellState.BURNING, CellState.IGNITING):
-                if state == CellState.BURNING:
-                    if nearest_burning is None or d < nearest_burning:
-                        nearest_burning = d
-                else:
-                    if nearest_igniting is None or d < nearest_igniting:
-                        nearest_igniting = d
-
-    return (nearest_burning, nearest_igniting)
+    burning = _nearest_distance(states == CellState.BURNING, row, col, radius)
+    igniting = _nearest_distance(states == CellState.IGNITING, row, col, radius)
+    return (burning, igniting)
 
 
 def build_mitigation_contexts(
@@ -273,8 +292,17 @@ def build_mitigation_contexts(
     for row, col in rural_cells:
         combined.append((row, col, False, True))
 
+    # Locate the fire once instead of rescanning the grid for every cell.
+    from .ca import CellState
+
+    states = np.asarray(grid.states, dtype=object)
+    burn_rows, burn_cols = np.nonzero(states == CellState.BURNING)
+    ign_rows, ign_cols = np.nonzero(states == CellState.IGNITING)
+    scan_radius = radius * 2
+
     for row, col, is_settlement, is_rural in combined:
-        burning_dist, igniting_dist = nearest_burning_or_igniting_distance(grid, row, col, radius * 2)
+        burning_dist = _distance_to_points(burn_rows, burn_cols, row, col, scan_radius)
+        igniting_dist = _distance_to_points(ign_rows, ign_cols, row, col, scan_radius)
         if burning_dist is None and igniting_dist is None:
             continue
 

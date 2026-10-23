@@ -18,6 +18,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import time
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from . import config
@@ -86,7 +88,11 @@ def _fetch_live(taxon_key: str, taxon_query: str, bbox: Tuple[float, float, floa
 
     def _raw(page: int, per: int = 200) -> Optional[Any]:
         tn = urllib.parse.quote(taxon_query, safe="")
-        bbox_s = ",".join(str(x) for x in bbox)
+        # iNaturalist reads bbox as swlat,swlng,nelat,nelng; callers pass
+        # (min_lon, min_lat, max_lon, max_lat). Sending the lon/lat order made
+        # the API ignore the box and return observations from anywhere.
+        min_lon, min_lat, max_lon, max_lat = bbox
+        bbox_s = f"{min_lat},{min_lon},{max_lat},{max_lon}"
         qs = ("page=%d&per_page=%d&taxon_name=%s&bbox=%s"
               "&order=desc&quality_grade=research") % (page, per, tn, bbox_s)
         url = "https://api.inaturalist.org/v1/observations?" + qs
@@ -149,6 +155,61 @@ def _fetch_live(taxon_key: str, taxon_query: str, bbox: Tuple[float, float, floa
 # the overlay stays on the island.
 KALIMANTAN_BIO_BBOX: Tuple[float, float, float, float] = (108.8, -4.2, 119.1, 7.3)
 
+# The live fetch is the slowest part of a cold start: four taxa, a couple of
+# paged iNaturalist requests each, all over the network. Observations change
+# slowly, so the points are kept on disk and only re-fetched once the snapshot
+# is older than CACHE_TTL_SECONDS.
+CACHE_PATH: Path = Path(__file__).resolve().parent.parent / "data" / "cache" / "bio_layers.json"
+CACHE_TTL_SECONDS: float = 24 * 3600.0
+
+
+def _read_cache(
+    path: Path = CACHE_PATH,
+    ttl: float = CACHE_TTL_SECONDS,
+) -> Optional[Dict[str, List[Tuple[float, float]]]]:
+    """Return cached points per taxon, or None when missing/stale/unreadable."""
+    try:
+        if ttl >= 0 and time.time() - path.stat().st_mtime > ttl:
+            return None
+        with path.open("r", encoding="utf-8") as fh:
+            raw = json.load(fh)
+    except Exception:
+        return None
+    if not isinstance(raw, dict):
+        return None
+    out: Dict[str, List[Tuple[float, float]]] = {}
+    for key, points in raw.items():
+        if not isinstance(points, list):
+            continue
+        out[str(key)] = [
+            (float(p[0]), float(p[1]))
+            for p in points
+            if isinstance(p, (list, tuple)) and len(p) >= 2
+        ]
+    return out or None
+
+
+def _write_cache(
+    layers: Dict[str, "BioLayer"],
+    path: Path = CACHE_PATH,
+) -> None:
+    """Persist the fetched points (best effort: a read-only disk is not fatal)."""
+    payload = {
+        key: [[round(lat, 5), round(lon, 5)] for (lat, lon) in layer.points]
+        for key, layer in layers.items()
+        if layer.points
+    }
+    if not payload:
+        return
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".tmp")
+        with tmp.open("w", encoding="utf-8") as fh:
+            json.dump(payload, fh)
+        os.replace(tmp, path)
+    except Exception:
+        pass
+
 
 def filter_points_to_bbox(points: List[Tuple[float, float]],
                           bbox: Tuple[float, float, float, float]) -> List[Tuple[float, float]]:
@@ -186,30 +247,80 @@ def load_bio_layer(taxon_key: str, taxon_query: Optional[str] = None,
     return BioLayer(key=taxon_key, query=taxon_query, points=pts)
 
 
+def _fetch_all_parallel(
+    bbox: Tuple[float, float, float, float],
+    target_per_taxon: int,
+    fixture_path: Optional[str],
+    use_v2: bool,
+) -> Dict[str, BioLayer]:
+    """Fetch every taxon at the same time instead of one after another.
+
+    The four requests are independent network round trips, so running them in
+    parallel turns ~4x the per-taxon latency into roughly one.
+    """
+    if use_v2:
+        from .bio_v2 import fetch_all as fetch_v2_all
+
+        raw = fetch_v2_all(bbox=bbox, target_per_taxon=target_per_taxon)
+        return {
+            key: BioLayer(key=key, query=TAXA.get(key, key), points=raw.get(key, []))
+            for key in TAXA
+        }
+
+    with ThreadPoolExecutor(max_workers=max(1, len(TAXA))) as pool:
+        futures = {
+            key: pool.submit(
+                load_bio_layer,
+                key,
+                bbox=bbox,
+                target=target_per_taxon,
+                fixture_path=fixture_path,
+            )
+            for key in TAXA
+        }
+        return {key: future.result() for key, future in futures.items()}
+
+
 def load_all_bio_layers(bbox: Optional[Tuple[float, float, float, float]] = None,
                         target_per_taxon: int = 500,
                         fixture_path: Optional[str] = None,
                         use_v2: bool = False,
+                        cache_path: Optional[str] = None,
+                        cache_ttl: float = CACHE_TTL_SECONDS,
                         ) -> Dict[str, BioLayer]:
     """Load every demo taxon as a BioLayer.
+
+    Points come from the on-disk snapshot when it is fresh (the common case),
+    otherwise they are fetched for all taxa in parallel and written back. A
+    failed fetch keeps serving the stale snapshot rather than an empty map.
 
     By default this uses the offline-first v1 loader (local fixture first,
     then v1 API). Set *use_v2=True* to fetch from the v2 endpoint instead.
     """
     bbox = bbox or DEMO_BBOX
+    path = Path(cache_path) if cache_path else CACHE_PATH
 
-    if use_v2:
-        from .bio_v2 import fetch_all as fetch_v2_all
-        raw = fetch_v2_all(bbox=bbox, target_per_taxon=target_per_taxon)
+    cached = _read_cache(path, ttl=cache_ttl)
+    if cached is not None:
         layers = {
-            key: BioLayer(key=key, query=TAXA.get(key, key), points=raw.get(key, []))
+            key: BioLayer(key=key, query=TAXA.get(key, key), points=cached.get(key, []))
             for key in TAXA
         }
     else:
-        layers = {
-            key: load_bio_layer(key, bbox=bbox, target=target_per_taxon, fixture_path=fixture_path)
-            for key in TAXA
-        }
+        layers = _fetch_all_parallel(
+            bbox=bbox,
+            target_per_taxon=target_per_taxon,
+            fixture_path=fixture_path,
+            use_v2=use_v2,
+        )
+        if not any(layer.points for layer in layers.values()):
+            # Offline: an old snapshot beats a blank map.
+            stale = _read_cache(path, ttl=-1)
+            if stale:
+                layers = {
+                    key: BioLayer(key=key, query=TAXA.get(key, key), points=stale.get(key, []))
+                    for key in TAXA
+                }
 
     # The flora & fauna layer is Kalimantan-only: drop any observation that
     # falls outside the island even if the source bbox was wider.
@@ -217,6 +328,10 @@ def load_all_bio_layers(bbox: Optional[Tuple[float, float, float, float]] = None
         kept = filter_points_to_bbox(layer.points, KALIMANTAN_BIO_BBOX)
         if len(kept) != len(layer.points):
             layers[key] = BioLayer(key=layer.key, query=layer.query, points=kept)
+
+    # Cache what was actually kept, so a cache hit and a fetch agree.
+    if cached is None and any(layer.points for layer in layers.values()):
+        _write_cache(layers, path)
     return layers
 
 

@@ -15,6 +15,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, List, Optional, Tuple
 
 V2_BASE = "https://api.inaturalist.org/v2/observations"
@@ -51,7 +52,11 @@ def _fetch_v2(
 
     while page <= max_pages and len(pts) < target:
         tn = urllib.parse.quote(taxon_query, safe="")
-        bbox_s = ",".join(str(x) for x in bbox)
+        # iNaturalist reads bbox as swlat,swlng,nelat,nelng; callers pass
+        # (min_lon, min_lat, max_lon, max_lat). Sending the lon/lat order made
+        # the API ignore the box and return observations from anywhere.
+        min_lon, min_lat, max_lon, max_lat = bbox
+        bbox_s = f"{min_lat},{min_lon},{max_lat},{max_lon}"
         qs = (
             "page=%d&per_page=%d&taxon_name=%s&bbox=%s"
             "&order=desc&quality_grade=research"
@@ -115,8 +120,16 @@ def fetch_all(
     target_per_taxon: int = 500,
     timeout_sec: int = 8,
 ) -> dict[str, List[Tuple[float, float]]]:
-    """Return one coordinate list per demo taxon from the v2 API."""
-    return {
-        key: _fetch_v2(query, bbox, target=target_per_taxon, timeout_sec=timeout_sec)
-        for key, query in TAXA.items()
-    }
+    """Return one coordinate list per demo taxon from the v2 API.
+
+    The taxa are fetched concurrently: each one is an independent set of
+    paged HTTP requests, so four sequential fetches only add latency.
+    """
+    with ThreadPoolExecutor(max_workers=max(1, len(TAXA))) as pool:
+        futures = {
+            key: pool.submit(
+                _fetch_v2, query, bbox, target=target_per_taxon, timeout_sec=timeout_sec
+            )
+            for key, query in TAXA.items()
+        }
+        return {key: future.result() for key, future in futures.items()}

@@ -68,35 +68,85 @@ class SimState:
     risk_conditioned_on: Optional[str] = None
 
 
-def initialize_simulation(
-    wind_dir_deg: Optional[float] = None,
-    n_steps: int = 12,
-    use_hotspots: bool = True,
-) -> SimState:
-    """Create the initial SimState for the demo."""
-    if wind_dir_deg is None:
-        wind_dir_deg = config.default_wind_direction_deg()
+# Everything below the wind direction — the OSM masks, the FIRMS dataset, the
+# trained model, the island surface and the iNaturalist points — costs seconds to
+# rebuild and is identical for every wind direction. ``use_static_cache=True``
+# keeps it for the lifetime of the process (the app opts in, one-off scripts and
+# tests do not, so monkeypatched loaders still take effect).
+_STATIC_CACHE: Dict[bool, Dict[str, Any]] = {}
 
-    params = CaParams(wind_dir_deg=wind_dir_deg)
 
+def _context_cache_path():
+    from pathlib import Path
+
+    return Path(config.data_cache_dir()) / "context_map.npz"
+
+
+def _context_cache_key(cell_grid: Any) -> str:
+    """Identify the snapshot + grid the cached masks were built from.
+
+    Empty when no snapshot file exists yet: an offline stub or a fresh fetch must
+    not be served from (or written to) a cache nobody can invalidate later.
+    """
+    from src.features import CONTEXT_MAP_CACHE_VERSION
+
+    snapshot_file = config.data_raw_dir() / "osm_snapshot.json"
+    if not snapshot_file.exists():
+        return ""
+    stat = snapshot_file.stat()
+    stamp = f"{stat.st_mtime_ns}:{stat.st_size}"
+    return (
+        f"{CONTEXT_MAP_CACHE_VERSION}|" + "|".join(str(v) for v in (
+            config.bounding_box(),
+            cell_grid.n_rows,
+            cell_grid.n_cols,
+            cell_grid.spacing_deg,
+            stamp,
+        ))
+    )
+
+
+def _static_inputs(use_hotspots: bool) -> Dict[str, Any]:
+    """Load the wind-independent half of a simulation state."""
     cell_grid = build_cell_grid()
-    grid = CaGrid().initialize(cell_grid.n_rows, cell_grid.n_cols)
 
-    # Reuse the cached OSM snapshot when possible: the Random Forest was trained
-    # on exactly those water/settlement/peat masks, and re-fetching Overpass on
-    # every run is both slow and a source of train/serve drift. Falls back to the
-    # offline Kalimantan stub when no live query is available (e.g. booth demo).
-    osm_snapshot = None
-    try:
-        from src.osm import load_or_fetch_snapshot
-        osm_snapshot = load_or_fetch_snapshot()
-    except Exception:
-        if STUB_SNAPSHOT_AVAILABLE:
-            osm_snapshot = make_kalimantan_stub_snapshot()
-        else:
-            osm_snapshot = None
+    # The masks only change when the snapshot or the grid does, so keep them in
+    # data/cache: rebuilding means parsing ~59k OSM features (~1 s of JSON alone)
+    # on every process start. The cache is keyed on the snapshot file's stamp, so
+    # a refreshed snapshot rebuilds it automatically.
+    from src.features import read_context_cache
 
-    context_map = build_context_map(osm_snapshot=osm_snapshot, cell_grid=cell_grid)
+    cache_path = _context_cache_path()
+    cache_key = _context_cache_key(cell_grid)
+    context_map = (
+        read_context_cache(cache_path, cache_key, cell_grid.n_rows, cell_grid.n_cols)
+        if cache_key
+        else None
+    )
+
+    if context_map is None:
+        # Reuse the cached OSM snapshot when possible: the Random Forest was
+        # trained on exactly those water/settlement/peat masks, and re-fetching
+        # Overpass on every run is both slow and a source of train-vs-serve drift.
+        # Falls back to the offline Kalimantan stub when no live query is
+        # available (e.g. booth demo).
+        osm_snapshot = None
+        try:
+            from src.osm import load_or_fetch_snapshot
+            osm_snapshot = load_or_fetch_snapshot()
+        except Exception:
+            if STUB_SNAPSHOT_AVAILABLE:
+                osm_snapshot = make_kalimantan_stub_snapshot()
+
+        # The fetch above may have just written the snapshot file, so the key is
+        # recomputed before it is used for the cache write.
+        cache_key = _context_cache_key(cell_grid)
+        context_map = build_context_map(
+            osm_snapshot=osm_snapshot,
+            cell_grid=cell_grid,
+            cache_path=cache_path if cache_key else None,
+            cache_key=cache_key,
+        )
 
     # Inland-only filter: water cells are excluded from the fire-spread / rural
     # surface. Settlement cells are still surfaced for mitigation guidance even if
@@ -109,8 +159,6 @@ def initialize_simulation(
             settlement_cells.append((row, col))
         elif context_map.is_water[row, col]:
             continue
-        elif context_map.is_peat_risk[row, col]:
-            rural_cells.append((row, col))
         else:
             rural_cells.append((row, col))
 
@@ -118,12 +166,81 @@ def initialize_simulation(
     if use_hotspots:
         try:
             df = load_firms_hotspots()
-            dataset = build_fire_dataset(df, bounding_box=config.bounding_box(), cell_grid=cell_grid)
+            dataset = build_fire_dataset(
+                df, bounding_box=config.bounding_box(), cell_grid=cell_grid
+            )
+        except Exception:
+            dataset = None
+
+    # Features for the day after the last observed FIRMS day, so the model sees
+    # real recent hotspots instead of an artificially quiet week.
+    recent = None
+    risk_conditioned_on: Optional[str] = None
+    if dataset is not None and dataset.labeled_days:
+        risk_conditioned_on = str(dataset.labeled_days[-1])
+        try:
+            recent = recent_hotspot_arrays(dataset)
+        except Exception:
+            recent = None
+
+    model = None
+    model_metrics: Dict[str, Any] = {}
+    model_error: Optional[Exception] = None
+    try:
+        model, model_metrics = load_trained_model()
+    except Exception as exc:
+        model_error = exc
+
+    # Biodiversity layer: use the v2 iNaturalist endpoint (with an offline-first
+    # fallback path in bio_loader if you prefer the local fixture).
+    bio_layers = load_all_bio_layers(
+        bbox=config.bounding_box(), target_per_taxon=500, use_v2=True,
+    )
+
+    return {
+        "cell_grid": cell_grid,
+        "context_map": context_map,
+        "settlement_cells": settlement_cells,
+        "rural_cells": rural_cells,
+        "dataset": dataset,
+        "recent": recent,
+        "risk_conditioned_on": risk_conditioned_on,
+        "model": model,
+        "model_metrics": model_metrics,
+        "model_error": model_error,
+        "bio_layers": bio_layers,
+    }
+
+
+def initialize_simulation(
+    wind_dir_deg: Optional[float] = None,
+    n_steps: int = 12,
+    use_hotspots: bool = True,
+    use_static_cache: bool = False,
+) -> SimState:
+    """Create the initial SimState for the demo."""
+    if wind_dir_deg is None:
+        wind_dir_deg = config.default_wind_direction_deg()
+
+    params = CaParams(wind_dir_deg=wind_dir_deg)
+
+    static = _STATIC_CACHE.get(use_hotspots) if use_static_cache else None
+    if static is None:
+        static = _static_inputs(use_hotspots)
+        if use_static_cache:
+            _STATIC_CACHE[use_hotspots] = static
+
+    cell_grid = static["cell_grid"]
+    context_map = static["context_map"]
+    dataset = static["dataset"]
+    grid = CaGrid().initialize(cell_grid.n_rows, cell_grid.n_cols)
+
+    seeded = 0
+    if use_hotspots and dataset is not None:
+        try:
             seeded = seed_from_hotspots(grid, dataset.hotspots, cell_grid)
         except Exception:
             seeded = 0
-    else:
-        seeded = 0
 
     if seeded == 0:
         center_row = cell_grid.n_rows // 2
@@ -133,38 +250,26 @@ def initialize_simulation(
 
     frames = run_simulation(grid, steps=n_steps, params=params)
 
-    # Risk map from the trained Random Forest. The model is asked about the day
-    # after the last observed FIRMS day, so its history features see real recent
-    # hotspots instead of an artificially quiet week.
+    # Risk map from the trained Random Forest.
     risk_map: Optional[np.ndarray] = None
     risk_source = "heuristic baseline"
     risk_metrics: Dict[str, Any] = {}
-    risk_conditioned_on: Optional[str] = None
 
-    recent = None
-    if dataset is not None and dataset.labeled_days:
-        last_day = dataset.labeled_days[-1]
-        risk_conditioned_on = str(last_day)
-        try:
-            recent = recent_hotspot_arrays(dataset)
-        except Exception:
-            recent = None
-
-    try:
-        model, model_metrics = load_trained_model()
-    except Exception as exc:
-        model, model_metrics = None, {}
-        risk_source = f"heuristic baseline (trained model failed to load: {exc})"
+    model = static["model"]
+    if model is None and static["model_error"] is not None:
+        risk_source = (
+            f"heuristic baseline (trained model failed to load: {static['model_error']})"
+        )
 
     if model is not None:
         try:
             risk_map = predict_risk_map(
                 model, context_map, wind_dir_deg=wind_dir_deg,
                 bounding_box=config.bounding_box(), cell_grid=cell_grid,
-                recent_hotspots=recent,
+                recent_hotspots=static["recent"],
             )
             risk_source = "random forest"
-            risk_metrics = model_metrics
+            risk_metrics = static["model_metrics"]
         except Exception as exc:
             risk_map = None
             risk_source = f"heuristic baseline (prediction failed: {exc})"
@@ -175,18 +280,15 @@ def initialize_simulation(
             bounding_box=config.bounding_box(), cell_grid=cell_grid,
         )
 
-    # Kalimantan-wide coarse risk surface (fast, vectorized).
+    # Kalimantan-wide coarse risk surface (fast, vectorized, wind-dependent).
     kal_risk, kal_bbox = kalimantan_risk_map(wind_dir_deg=wind_dir_deg)
 
     contexts = build_mitigation_contexts(
-        grid, settlement_cells, rural_cells, risk_map=risk_map, wind_dir_deg=wind_dir_deg,
+        grid, static["settlement_cells"], static["rural_cells"],
+        risk_map=risk_map, wind_dir_deg=wind_dir_deg,
     )
 
-    # Biodiversity layer: use the v2 iNaturalist endpoint (with an offline-first
-    # fallback path in bio_loader if you prefer the local fixture).
-    bio_layers = load_all_bio_layers(
-        bbox=config.bounding_box(), target_per_taxon=500, use_v2=True,
-    )
+    bio_layers = static["bio_layers"]
 
     return SimState(
         grid=grid,
@@ -195,15 +297,15 @@ def initialize_simulation(
         params=params,
         risk_map=risk_map,
         contexts=contexts,
-        settlement_cells=settlement_cells,
-        rural_cells=rural_cells,
+        settlement_cells=static["settlement_cells"],
+        rural_cells=static["rural_cells"],
         wind_dir_deg=wind_dir_deg,
         bio_layers=bio_layers,
         kalimantan_risk=kal_risk,
         kalimantan_bbox=kal_bbox,
         risk_source=risk_source,
         risk_metrics=risk_metrics,
-        risk_conditioned_on=risk_conditioned_on,
+        risk_conditioned_on=static["risk_conditioned_on"],
     )
 
 

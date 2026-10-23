@@ -15,22 +15,15 @@ import pickle
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-import joblib
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import (
-    accuracy_score,
-    average_precision_score,
-    precision_score,
-    recall_score,
-    roc_auc_score,
-)
-from sklearn.model_selection import train_test_split
 
 from . import config
 from .features import build_feature_table, feature_names
+
+# scikit-learn is imported inside the training/persistence helpers below, never
+# at module import: pulling in ``sklearn.ensemble`` (and scipy) cost ~15 s of the
+# app's first page load, while scoring only needs the numpy forest copy.
 
 
 Model = Any
@@ -53,6 +46,9 @@ def make_model(model_type: Optional[str] = None, random_state: Optional[int] = N
     # and it inflated the mean predicted probability to 0.24 against an
     # observed 0.024. The unweighted forest both ranks better and keeps the
     # map readable as a probability.
+    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.linear_model import LogisticRegression
+
     if model_type == "logistic_regression":
         return LogisticRegression(
             max_iter=2000,
@@ -90,6 +86,15 @@ def train(
     at random would put the same cell on both sides of the split and inflate the
     metrics, because some cells burn repeatedly.
     """
+    from sklearn.metrics import (
+        accuracy_score,
+        average_precision_score,
+        precision_score,
+        recall_score,
+        roc_auc_score,
+    )
+    from sklearn.model_selection import train_test_split
+
     if wind_dir_deg is None:
         wind_dir_deg = config.default_wind_direction_deg()
     if test_fraction is None:
@@ -374,11 +379,156 @@ def wind_alignment_for_cell(
 
 
 # ---------------------------------------------------------------------------
+# Dependency-free forest inference
+# ---------------------------------------------------------------------------
+# A fitted forest is just per-tree node arrays. ``src.train`` writes a flat
+# numpy copy next to the joblib, so the app can score cells without importing
+# scikit-learn (and scipy, ~15 s) on the way to its first paint.
+
+
+class NumpyForest:
+    """Inference-only stand-in for a fitted ``RandomForestClassifier``.
+
+    Exposes the attributes ``predict_risk_map`` and ``feature_importance_table``
+    use (``predict_proba``, ``predict``, ``n_features_in_``, ``classes_``,
+    ``feature_importances_``) with identical probabilities.
+    """
+
+    def __init__(
+        self,
+        children_left: np.ndarray,
+        children_right: np.ndarray,
+        feature: np.ndarray,
+        threshold: np.ndarray,
+        value: np.ndarray,
+        roots: np.ndarray,
+        classes: np.ndarray,
+        feature_importances: np.ndarray,
+    ) -> None:
+        self._left = np.asarray(children_left, dtype=np.int32)
+        self._right = np.asarray(children_right, dtype=np.int32)
+        self._feature = np.asarray(feature, dtype=np.int32)
+        self._threshold = np.asarray(threshold, dtype=np.float64)
+        self._value = np.asarray(value, dtype=np.float64)
+        self._roots = np.asarray(roots, dtype=np.int32)
+        self.classes_ = np.asarray(classes)
+        self.n_features_in_ = int(feature_importances.shape[0])
+        self.feature_importances_ = np.asarray(feature_importances, dtype=np.float64)
+        self.n_estimators = int(self._roots.size)
+
+    def predict_proba(self, X: Any) -> np.ndarray:
+        X = np.asarray(X, dtype=np.float64)
+        if X.ndim == 1:
+            X = X.reshape(1, -1)
+        if X.shape[1] != self.n_features_in_:
+            raise ValueError(
+                f"Trained model expects {self.n_features_in_} features but the "
+                f"feature table now has {X.shape[1]}; retrain with "
+                "`python -m src.train`."
+            )
+        n = X.shape[0]
+        if n == 0:
+            return np.zeros((0, self.classes_.size), dtype=float)
+
+        # Walk every tree at once: ``nodes`` holds one node index per (row, tree)
+        # and the leaves simply stop moving until the deepest tree is done.
+        rows = np.arange(n)[:, None]
+        nodes = np.broadcast_to(self._roots, (n, self._roots.size)).copy()
+        while True:
+            feat = self._feature[nodes]
+            leaf = feat < 0
+            if leaf.all():
+                break
+            values = X[rows, np.where(leaf, 0, feat)]
+            go_left = values <= self._threshold[nodes]
+            nxt = np.where(go_left, self._left[nodes], self._right[nodes])
+            nodes = np.where(leaf, nodes, nxt)
+
+        return self._value[nodes].mean(axis=1)
+
+    def predict(self, X: Any) -> np.ndarray:
+        return self.classes_[np.argmax(self.predict_proba(X), axis=1)]
+
+
+def _forest_arrays(model: Model) -> Optional[Dict[str, np.ndarray]]:
+    """Flatten a fitted forest into the arrays :class:`NumpyForest` expects."""
+    trees = getattr(model, "estimators_", None)
+    if not trees or not hasattr(trees[0], "tree_"):
+        return None
+
+    left: List[np.ndarray] = []
+    right: List[np.ndarray] = []
+    feature: List[np.ndarray] = []
+    threshold: List[np.ndarray] = []
+    value: List[np.ndarray] = []
+    roots: List[int] = []
+    offset = 0
+    for est in trees:
+        tree = est.tree_
+        # Concatenated trees share one node array, so shift the child indices of
+        # this tree by its offset; -1 marks a leaf and stays as it is.
+        left.append(np.where(tree.children_left >= 0, tree.children_left + offset, -1))
+        right.append(np.where(tree.children_right >= 0, tree.children_right + offset, -1))
+        feature.append(tree.feature)
+        threshold.append(tree.threshold)
+        node_value = np.asarray(tree.value, dtype=np.float64)
+        if node_value.ndim == 3:
+            node_value = node_value[:, 0, :]
+        totals = node_value.sum(axis=1, keepdims=True)
+        value.append(node_value / np.where(totals > 0, totals, 1.0))
+        roots.append(offset)
+        offset += int(tree.node_count)
+
+    n_features = int(getattr(model, "n_features_in_", feature[0].max() + 1))
+    importances = getattr(model, "feature_importances_", None)
+    if importances is None:
+        importances = np.zeros(n_features, dtype=np.float64)
+
+    return {
+        "children_left": np.concatenate(left).astype(np.int32),
+        "children_right": np.concatenate(right).astype(np.int32),
+        "feature": np.concatenate(feature).astype(np.int32),
+        "threshold": np.concatenate(threshold).astype(np.float64),
+        "value": np.concatenate(value).astype(np.float64),
+        "roots": np.asarray(roots, dtype=np.int32),
+        "classes": np.asarray(getattr(model, "classes_", np.array([0, 1]))),
+        "feature_importances": np.asarray(importances, dtype=np.float64),
+    }
+
+
+def save_forest_arrays(model: Model, path: Path) -> Optional[Path]:
+    """Write the numpy copy of *model* (no-op for non-forest models)."""
+    arrays = _forest_arrays(model)
+    if arrays is None:
+        return None
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "wb") as fh:
+        np.savez_compressed(fh, **arrays)
+    return path
+
+
+def load_forest_arrays(path: Path) -> NumpyForest:
+    with np.load(path) as data:
+        return NumpyForest(
+            data["children_left"],
+            data["children_right"],
+            data["feature"],
+            data["threshold"],
+            data["value"],
+            data["roots"],
+            data["classes"],
+            data["feature_importances"],
+        )
+
+
+# ---------------------------------------------------------------------------
 # Persistence
 # ---------------------------------------------------------------------------
 
 
 def save_model(model: Model, path: Path) -> Path:
+    import joblib
+
     path.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(model, path)
     return path
@@ -387,6 +537,8 @@ def save_model(model: Model, path: Path) -> Path:
 def load_model(path: Path) -> Model:
     if not path.exists():
         raise FileNotFoundError(f"Model file not found: {path}")
+    import joblib
+
     return joblib.load(path)
 
 
@@ -408,9 +560,24 @@ def load_trained_model(
     """
     path = Path(model_path) if model_path is not None else config.model_path()
     meta = Path(metrics_path) if metrics_path is not None else config.model_metrics_path()
+    arrays = path.with_suffix(".npz")
+
+    # Score with the numpy copy whenever it is at least as fresh as the joblib.
+    if arrays.exists() and (not path.exists() or arrays.stat().st_mtime >= path.stat().st_mtime):
+        try:
+            return load_forest_arrays(arrays), load_metrics(meta)
+        except (OSError, ValueError, KeyError):
+            pass
+
     if not path.exists():
         return None, load_metrics(meta)
-    return load_model(path), load_metrics(meta)
+    model = load_model(path)
+    # First run after a retrain: build the numpy copy for the next page load.
+    try:
+        save_forest_arrays(model, arrays)
+    except (OSError, ValueError):
+        pass
+    return model, load_metrics(meta)
 
 
 def load_metrics(path: Path) -> Dict[str, Any]:

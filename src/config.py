@@ -20,6 +20,7 @@ from typing import Tuple
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _DATA_RAW_DIR = _PROJECT_ROOT / "data" / "raw"
+_DATA_CACHE_DIR = _PROJECT_ROOT / "data" / "cache"
 _DATA_PROCESSED_DIR = _PROJECT_ROOT / "data" / "processed"
 _FIGURES_DIR = _PROJECT_ROOT / "figures"
 
@@ -27,6 +28,11 @@ _FIGURES_DIR = _PROJECT_ROOT / "figures"
 def data_raw_dir() -> Path:
     _DATA_RAW_DIR.mkdir(parents=True, exist_ok=True)
     return _DATA_RAW_DIR
+
+
+def data_cache_dir() -> Path:
+    _DATA_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    return _DATA_CACHE_DIR
 
 
 def data_processed_dir() -> Path:
@@ -263,6 +269,10 @@ def ml_random_state() -> int:
 _MODELS_DIR = _PROJECT_ROOT / "models"
 MODEL_FILENAME: str = "risk_rf.joblib"
 MODEL_METRICS_FILENAME: str = "risk_rf_metrics.json"
+# Plain-array copy of the forest, written next to the joblib by ``src.train``.
+# It lets the app score cells with numpy instead of importing scikit-learn,
+# which alone cost ~15 s of the first page load.
+MODEL_ARRAYS_FILENAME: str = "risk_rf.npz"
 
 
 def models_dir() -> Path:
@@ -276,6 +286,10 @@ def model_path() -> Path:
 
 def model_metrics_path() -> Path:
     return _MODELS_DIR / MODEL_METRICS_FILENAME
+
+
+def model_arrays_path() -> Path:
+    return _MODELS_DIR / MODEL_ARRAYS_FILENAME
 
 
 # ---------------------------------------------------------------------------

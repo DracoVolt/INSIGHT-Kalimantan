@@ -13,7 +13,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple
+from functools import lru_cache
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -68,7 +69,9 @@ class FeatureRow:
 # ---------------------------------------------------------------------------
 
 
+@lru_cache(maxsize=4096)
 def _day_offset_iso(base_iso: str, offset_days: int) -> str:
+    """Shift an ISO date; cached because it is asked for the same days a lot."""
     dt = datetime.strptime(base_iso, "%Y-%m-%d")
     dt = dt + timedelta(days=offset_days)
     return dt.strftime("%Y-%m-%d")
@@ -207,20 +210,35 @@ class ContextMap:
         return float(self._settlement_dist[row, col])
 
 
+CONTEXT_MAP_CACHE_VERSION = 1
+
+
 def build_context_map(
     osm_snapshot: Optional[object] = None,
     cell_grid: Optional[CellGrid] = None,
+    cache_path: Optional[Any] = None,
+    cache_key: str = "",
 ) -> ContextMap:
     """Build a ContextMap from an OsmSnapshot.
 
     If no snapshot is provided, the map is left blank (all False). This lets the
     pipeline run even before OSM data is fetched.
+
+    Passing *cache_path* (plus a *cache_key* that changes whenever the snapshot
+    or grid does) keeps the three boolean masks in a small ``.npz``. Parsing the
+    OSM snapshot and classifying its ~59k features is the slowest part of a cold
+    start, and the result only changes when the snapshot is refreshed.
     """
     if cell_grid is None:
         cell_grid = build_cell_grid()
 
     n_rows = cell_grid.n_rows
     n_cols = cell_grid.n_cols
+
+    if cache_path is not None and cache_key:
+        cached = read_context_cache(cache_path, cache_key, n_rows, n_cols)
+        if cached is not None:
+            return cached
 
     is_water = np.zeros((n_rows, n_cols), dtype=bool)
     is_settlement = np.zeros((n_rows, n_cols), dtype=bool)
@@ -230,43 +248,114 @@ def build_context_map(
         # Attempt duck-typed access so this works with either the real module or
         # a lightweight test stub.
         features = getattr(osm_snapshot, "features", [])
+        lats: List[float] = []
+        lons: List[float] = []
+        water: List[bool] = []
+        settlement: List[bool] = []
+        peat: List[bool] = []
         for f in features:
-            if f.center is None:
+            center = getattr(f, "center", None)
+            if center is None:
                 continue
-            lat, lon = f.center
-            try:
-                row, col = cell_grid.lon_lat_to_row_col(lon, lat)
-            except ValueError:
-                continue
+            lat, lon = center
+            tags = getattr(f, "tags", {}) or {}
+            lats.append(lat)
+            lons.append(lon)
+            water.append(_is_water_tags(tags))
+            settlement.append(_is_settlement_tags(tags))
+            peat.append(_is_peat_tags(tags))
 
-            tags = getattr(f, "tags", {})
-            if _is_water_tags(tags):
-                is_water[row, col] = True
-            if _is_settlement_tags(tags):
-                is_settlement[row, col] = True
-            if _is_peat_tags(tags):
-                is_peat_risk[row, col] = True
+        if lats:
+            lat_arr = np.asarray(lats, dtype=float)
+            lon_arr = np.asarray(lons, dtype=float)
+            # Same mapping as CellGrid.lon_lat_to_row_col, done in one shot:
+            # a per-feature Python call dominated this function's runtime.
+            spacing = float(cell_grid.spacing_deg)
+            inside = (
+                (lon_arr >= cell_grid.min_lon)
+                & (lon_arr <= cell_grid.max_lon)
+                & (lat_arr >= cell_grid.min_lat)
+                & (lat_arr <= cell_grid.max_lat)
+            )
+            cols = np.clip(((lon_arr - cell_grid.min_lon) / spacing).astype(int), 0, n_cols - 1)
+            rows = np.clip(((cell_grid.max_lat - lat_arr) / spacing).astype(int), 0, n_rows - 1)
+            for flags, target in (
+                (water, is_water),
+                (settlement, is_settlement),
+                (peat, is_peat_risk),
+            ):
+                hit = inside & np.asarray(flags, dtype=bool)
+                if hit.any():
+                    target[rows[hit], cols[hit]] = True
 
-    return ContextMap(
+    context_map = ContextMap(
         n_rows=n_rows,
         n_cols=n_cols,
         is_water=is_water,
         is_settlement=is_settlement,
         is_peat_risk=is_peat_risk,
     )
+    if cache_path is not None and cache_key:
+        _write_context_cache(cache_path, cache_key, context_map)
+    return context_map
+
+
+def read_context_cache(
+    path: Any,
+    key: str,
+    n_rows: int,
+    n_cols: int,
+) -> Optional[ContextMap]:
+    """Return cached masks for *key*, or None when the cache is absent/stale."""
+    try:
+        with np.load(path) as data:
+            if str(data["key"]) != key:
+                return None
+            water = data["is_water"]
+            settlement = data["is_settlement"]
+            peat = data["is_peat_risk"]
+    except (OSError, ValueError, KeyError):
+        return None
+    if water.shape != (n_rows, n_cols):
+        return None
+    return ContextMap(
+        n_rows=n_rows,
+        n_cols=n_cols,
+        is_water=water.astype(bool),
+        is_settlement=settlement.astype(bool),
+        is_peat_risk=peat.astype(bool),
+    )
+
+
+def _write_context_cache(path: Any, key: str, context_map: ContextMap) -> None:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "wb") as fh:
+            np.savez_compressed(
+                fh,
+                key=np.asarray(key),
+                is_water=context_map.is_water,
+                is_settlement=context_map.is_settlement,
+                is_peat_risk=context_map.is_peat_risk,
+            )
+    except OSError:
+        pass
+
+
+_SETTLEMENT_PLACES = frozenset(p.lower() for p in config.OSM_SETTLEMENT_PLACE_TAGS)
+_WATER_NATURAL = frozenset({"water", "coastline"})
 
 
 def _is_water_tags(tags: Dict[str, str]) -> bool:
     return bool(
-        tags.get("natural", "").lower() in {"water", "coastline"}
+        tags.get("natural", "").lower() in _WATER_NATURAL
         or tags.get("water", "").lower()
         or tags.get("waterway", "").lower()
     )
 
 
 def _is_settlement_tags(tags: Dict[str, str]) -> bool:
-    place = tags.get("place", "").lower()
-    return place in {p.lower() for p in config.OSM_SETTLEMENT_PLACE_TAGS}
+    return tags.get("place", "").lower() in _SETTLEMENT_PLACES
 
 
 def _is_peat_tags(tags: Dict[str, str]) -> bool:

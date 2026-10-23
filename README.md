@@ -70,6 +70,11 @@ masks, evaluates on the last 20% of days, and writes `models/risk_rf.joblib` plu
 its prediction on the most recent FIRMS day; if they are missing it falls back to
 the heuristic baseline and says so in the sidebar.
 
+`src.train` also writes `models/risk_rf.npz`, a plain-array copy of the forest.
+The app scores cells from that copy, so a cold page load never imports
+scikit-learn (~7 s of the first render); `risk_rf.joblib` stays the training
+artifact and is only unpickled when the `.npz` is missing or older.
+
 Trained on the bundled 7-day MODIS export (1,770 hotspots in the demo box over 8
 days, 26,912 cell-days, 3.2% positive), the forest scores ROC-AUC 0.883 and
 PR-AUC 0.283 on the two held-out final days. That is a genuine prediction, but a
@@ -125,6 +130,7 @@ insight-kalimantan/
 │
 ├── models/
 │   ├── risk_rf.joblib
+│   ├── risk_rf.npz
 │   └── risk_rf_metrics.json
 │
 ├── tests/
