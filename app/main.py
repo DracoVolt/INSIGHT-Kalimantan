@@ -686,11 +686,17 @@ def _new_osm_map(
     if full_height:
         # The shell stretches the iframe to the viewport; let the map itself
         # fill that iframe instead of keeping Leaflet's inline pixel height.
+        # This is a separate document, so it needs its own mobile baseline:
+        # dvh so the map tracks the phone's URL bar, and no tap flash or
+        # pull-to-refresh over the tiles.
         m.get_root().header.add_child(
             folium.Element(
-                "<style>html, body { height: 100vh; margin: 0; } "
+                "<style>html, body { height: 100vh; height: 100dvh; "
+                "margin: 0; overscroll-behavior: none; "
+                "-webkit-tap-highlight-color: transparent; "
+                "-webkit-text-size-adjust: 100%; } "
                 ".folium-map, .leaflet-container { height: 100vh !important; "
-                "width: 100% !important; } "
+                "height: 100dvh !important; width: 100% !important; } "
                 ".leaflet-bottom.leaflet-right { left: 0; right: auto; } "
                 "</style>"
             )
@@ -1092,13 +1098,19 @@ def run_streamlit() -> None:
             st.caption("Each cell is a small dot coloured by its CA state.")
             _render_dot_grid(current_frame, state.params, dot_image_path=DOT_IMAGE_PATH)
 
+    # The map renders before the emergency panel: on wide screens both panels
+    # float, so order is irrelevant, but on phones the emergency panel drops
+    # into the flow and would otherwise push the map a few thousand pixels
+    # down the page. Map first, mitigation list under it, layers last.
+    _render_map(state, show_bio_overlay=show_bio_overlay)
+
     # Emergency content floats on the right; when switched off it is not
     # rendered at all, so nothing frames the map.
     if show_emergency_panel:
         with st.container(key="emergency_panel"):
             _render_emergency_panel(state)
 
-    _render_map_area(state, current_frame, show_bio_overlay=show_bio_overlay)
+    _render_layers(state, show_bio_overlay=show_bio_overlay)
 
 # ---------------------------------------------------------------------------
 # Map area (left column): biodiversity + Kalimantan-wide risk map
@@ -1123,8 +1135,8 @@ def _render_risk_provenance(state: Any) -> None:
     st.caption(" · ".join(bits))
 
 
-def _render_map_area(state: Any, current_frame: Any, show_bio_overlay: bool = True) -> None:
-    """Map-first view: the risk map fills the viewport, extra layers below."""
+def _render_map(state: Any, show_bio_overlay: bool = True) -> None:
+    """The full-bleed risk map: the page itself on every screen size."""
     if state.risk_map is not None:
         with st.container(key="windy_map"):
             if float(state.risk_map.max()) <= 0.0:
@@ -1138,6 +1150,9 @@ def _render_map_area(state: Any, current_frame: Any, show_bio_overlay: bool = Tr
     else:
         st.warning("Risk map unavailable.")
 
+
+def _render_layers(state: Any, show_bio_overlay: bool = True) -> None:
+    """Secondary layers (biodiversity, island overview) below the map."""
     with st.container(key="windy_layers"):
         st.markdown("#### Layers")
         with st.expander("Biodiversity distribution (Kalimantan flora/fauna)", expanded=True):
