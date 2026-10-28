@@ -1,3 +1,8 @@
+<img width="1597" height="808" alt="Layers" src="https://github.com/user-attachments/assets/b090a111-b2ee-4ae6-b8aa-cab07dbea804" /> Layers
+<img width="1598" height="809" alt="Second Page" src="https://github.com/user-attachments/assets/79035d4c-f027-42f9-8df4-cd8777b2c488" /> Second Page 
+<img width="1599" height="813" alt="First Page" src="https://github.com/user-attachments/assets/b9bbade1-5053-4cd7-be78-117e690e3e9d" /> First Page
+<img width="512" height="279" alt="Logo-Icon" src="https://github.com/user-attachments/assets/9add5bc6-11cf-44a1-88e6-03ee13a922c5" /> LOGO
+
 # INSIGHT
 
 Wildfire spread simulation and civilian-mitigation guidance for Central Kalimantan,

@@ -8,6 +8,9 @@ scikit-learn
 matplotlib
 seaborn
 
-# Optional app dependencies (install extras for Streamlit + maps)
-# streamlit
-# folium
+# App UI + maps. Streamlit Community Cloud installs from this file, so the
+# deployed site needs these here (requirements-dev.txt is not installed there).
+streamlit
+folium
+streamlit-folium
+pillow
