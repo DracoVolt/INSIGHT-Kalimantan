@@ -33,7 +33,7 @@
 - [Training the Risk Model](#training-the-risk-model)
 - [Project Structure](#project-structure)
 - [How It Works](#how-it-works)
-  - [Cellular Automaton (CA)](#cellular-automaton-ca)
+  - [Cellular Automaton](#cellular-automaton)
   - [Machine Learning Risk Model](#machine-learning-risk-model)
   - [Civilian Mitigation Guidance](#civilian-mitigation-guidance)
   - [Biodiversity Layer](#biodiversity-layer)
@@ -48,72 +48,66 @@
 
 ## Overview
 
-**INSIGHT** is a science-fair-scale prototype that simulates peatland wildfire spread across Central Kalimantan and provides step-by-step civilian mitigation guidance when simulated fire approaches rural areas or settlements.
+INSIGHT is a science-fair-scale prototype that simulates peatland wildfire spread across Central Kalimantan and provides step-by-step civilian mitigation guidance when simulated fire approaches rural areas or settlements.
 
-The demo area covers approximately **222 km × 222 km** around **Palangkaraya / Sebangau / Kahayan** — the heart of Kalimantan's peat swamp forest — at a grid resolution of roughly **4 km × 4 km per cell**.
+The demo area covers approximately **222 km x 222 km** around **Palangkaraya / Sebangau / Kahayan** — the heart of Kalimantan's peat swamp forest — at a grid resolution of roughly **4 km x 4 km per cell**.
 
 | What it is | What it is not |
 |---|---|
 | A transparent, explainable science demo | An operational fire management tool |
-| A teaching model with real geospatial data | A production-grade fire spread forecast |
+| A teaching model using real geospatial data | A production-grade fire spread forecast |
 | A full-stack Streamlit app with interactive maps | Emergency advice of any kind |
 
 ---
 
 ## Features
 
-- 🔥 **Physics-based Cellular Automaton** — wind-driven fire spread across a real geographic grid, seeded from NASA FIRMS hotspot data
-- 🤖 **Random Forest risk model** — predicts per-cell ignition likelihood from OSM features, peat flags, wind alignment, and hotspot history; scores ROC-AUC **0.883** on a temporal hold-out
-- 🗺️ **Interactive Folium maps** — fire risk raster overlay, flora & fauna biodiversity layer, Kalimantan-wide coarse risk view, and a full OSM basemap
-- 👥 **Civilian mitigation guidance** — rule-based LOW / MEDIUM / HIGH alerts for settlement and rural cells, with specific timed actions at each risk level
-- 🌿 **Biodiversity layer** — iNaturalist observations for Orangutan, Proboscis monkey, Rafflesia, and Nepenthes overlaid on the fire map
-- 🧭 **User location input** — enter your lat/lon to receive personalised mitigation advice and a nearby-cell summary
-- ⚡ **Fast cold start** — the trained forest is stored as a dependency-free NumPy archive (`risk_rf.npz`); scikit-learn is not imported at page-load time
+- Physics-based Cellular Automaton with wind-driven fire spread seeded from NASA FIRMS hotspot data
+- Random Forest risk model — predicts per-cell ignition likelihood from OSM features, peat flags, wind alignment, and hotspot history; ROC-AUC **0.883** on a temporal hold-out
+- Interactive Folium maps — fire risk raster overlay, flora & fauna biodiversity layer, Kalimantan-wide coarse risk view, and a full OSM basemap
+- Civilian mitigation guidance — rule-based LOW / MEDIUM / HIGH alerts for settlement and rural cells, with specific timed actions at each risk level
+- Biodiversity layer — iNaturalist observations for Orangutan, Proboscis monkey, Rafflesia, and Nepenthes overlaid on the fire map
+- User location input — enter your lat/lon to receive personalised mitigation advice and a nearby-cell summary
+- Fast cold start — the trained forest is stored as a dependency-free NumPy archive (`risk_rf.npz`); scikit-learn is not imported at page-load time
 
 ---
 
 ## Live Demo
 
-> Deploy to **Streamlit Community Cloud** in one click:
-> 1. Fork this repo
-> 2. Go to [share.streamlit.io](https://share.streamlit.io) → **New app**
-> 3. Set main module to `app/main.py`, branch `master`
-> 4. Click **Deploy** — `requirements.txt` is installed automatically
+Deploy to **Streamlit Community Cloud** in one click:
+1. Fork this repository
+2. Go to [share.streamlit.io](https://share.streamlit.io) → **New app**
+3. Set main module to `app/main.py`, branch `master`
+4. Click **Deploy** — `requirements.txt` is installed automatically
 
-The first cloud load downloads OpenStreetMap + iNaturalist data (≈ 1–3 min). Later loads use the cached snapshot.
+The first cloud load downloads OpenStreetMap and iNaturalist data (1–3 minutes). Later loads use the cached snapshot.
 
 ---
 
 ## Quick Start
 
-**Requires Python 3.10+.**
+Requires Python 3.10+.
 
 ```bash
-# 1. Clone the repo
+# Clone the repo
 git clone https://github.com/DracoVolt/INSIGHT-Kalimantan.git
 cd INSIGHT-Kalimantan
 
-# 2. Create a virtual environment
+# Create a virtual environment and install dependencies
 python -m venv .venv
 
-# 3. Install dependencies
 # macOS / Linux
 .venv/bin/pip install -r requirements.txt
-
-# Windows PowerShell
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-
-# 4. Run the app
-# macOS / Linux
 .venv/bin/streamlit run app/main.py
 
 # Windows PowerShell
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\python.exe -m streamlit run app/main.py
 ```
 
 Then open **http://localhost:8501** in your browser.
 
-> **Note:** The trained model (`models/risk_rf.npz`) is already committed — no training step is needed to view the app.
+The trained model (`models/risk_rf.npz`) is already committed — no training step is needed to view the app.
 
 ---
 
@@ -127,15 +121,15 @@ python -m streamlit run app/main.py
 
 ### First-run behaviour
 
-On a cold start, the app downloads and caches:
+On a cold start the app downloads and caches three files:
 
-| File | Size | What it is |
+| File | Size | Description |
 |---|---|---|
-| `data/raw/osm_snapshot.json` | ~16 MB | OpenStreetMap extract for the demo bbox |
+| `data/raw/osm_snapshot.json` | ~16 MB | OpenStreetMap extract for the demo bounding box |
 | `data/cache/context_map.npz` | small | Pre-computed OSM cell masks |
 | `data/cache/bio_layers.json` | small | iNaturalist observation cache |
 
-This takes roughly **1–3 minutes** with a working internet connection. Later starts reuse the cache and load in seconds. If the network is unavailable, the app falls back to offline stubs and still runs.
+This takes roughly 1–3 minutes with a working internet connection. Later starts reuse the cache and load in seconds. If the network is unavailable, the app falls back to offline stubs and still runs.
 
 ### Troubleshooting
 
@@ -145,13 +139,13 @@ This takes roughly **1–3 minutes** with a working internet connection. Later s
 | `missing ScriptRunContext` warnings | You ran `python -m app.main`. Use `streamlit run app/main.py` instead. |
 | Port 8501 already in use | `python -m streamlit run app/main.py --server.port 8502` |
 | Page is blank / spinner forever | First run downloads data; watch the terminal. Delete `data/cache/` to force a refresh. |
-| Browser doesn't open automatically | `.streamlit/config.toml` sets `headless = true`; open http://localhost:8501 manually. |
+| Browser does not open automatically | `.streamlit/config.toml` sets `headless = true`; open http://localhost:8501 manually. |
 
 ---
 
 ## Training the Risk Model
 
-The risk map is produced by a **Random Forest** trained on real NASA FIRMS data, not a hand-written formula. A pre-trained model is committed to this repo, but you can retrain it on a fresh FIRMS export:
+The risk map is produced by a Random Forest trained on real NASA FIRMS data, not a hand-written formula. A pre-trained model is committed to this repo, but you can retrain it on a fresh FIRMS export:
 
 1. Download a 7-day NASA FIRMS MODIS/VIIRS CSV from [firms.modaps.eosdis.nasa.gov](https://firms.modaps.eosdis.nasa.gov/)
 2. Run the training script:
@@ -161,11 +155,11 @@ python -m src.train --firms data/raw/MODIS_C6_1_Global_7d.csv
 ```
 
 The script:
-- Filters the global CSV to the demo bounding box (writing `data/raw/firms_hotspots.csv` for CA seeding)
+- Filters the global CSV to the demo bounding box, writing `data/raw/firms_hotspots.csv` for CA seeding
 - Builds OSM-derived features and performs a **temporal train/test split** (last 20% of days as test)
 - Evaluates on the held-out days and prints metrics
-- Writes `models/risk_rf.joblib` + `models/risk_rf_metrics.json`
-- Also writes `models/risk_rf.npz` — a flat NumPy copy of the forest used by the app at inference time (avoids importing scikit-learn on page load, saving ~15 s)
+- Writes `models/risk_rf.joblib` and `models/risk_rf_metrics.json`
+- Writes `models/risk_rf.npz` — a flat NumPy copy of the forest used by the app at inference time (avoids importing scikit-learn on page load, saving ~15 s)
 
 ---
 
@@ -175,30 +169,30 @@ The script:
 INSIGHT-Kalimantan/
 │
 ├── app/                        # Streamlit application
-│   ├── main.py                 # App entry point (1 300 lines, full UI)
+│   ├── main.py                 # App entry point
 │   ├── ca_simulator.py         # Simulation state management for the UI
 │   └── __init__.py
 │
-├── src/                        # Core library (importable independently)
-│   ├── config.py               # All constants & bounding-box config
+├── src/                        # Core library
+│   ├── config.py               # All constants and bounding-box config
 │   ├── ca.py                   # Cellular Automaton engine
-│   ├── ml.py                   # Random Forest model + NumpyForest inference
+│   ├── ml.py                   # Random Forest model and NumpyForest inference
 │   ├── train.py                # CLI training script (python -m src.train)
 │   ├── features.py             # Feature engineering for the ML model
-│   ├── fire_data.py            # FIRMS hotspot loading & cell grid
+│   ├── fire_data.py            # FIRMS hotspot loading and cell grid
 │   ├── osm.py                  # OpenStreetMap / Overpass integration
 │   ├── osm_stub.py             # Offline stub for OSM data
 │   ├── land_mask.py            # Land/water mask for the Kalimantan map
 │   ├── mitigation.py           # Civilian mitigation rule engine
 │   ├── bio_v2.py               # iNaturalist API v2 client
-│   ├── bio_loader.py           # Loads & caches biodiversity layers
+│   ├── bio_loader.py           # Loads and caches biodiversity layers
 │   ├── bio_stub_fixture.json   # Offline fallback observation data
 │   ├── icons.py                # SVG icon helpers
 │   └── __init__.py
 │
 ├── data/
 │   ├── raw/
-│   │   └── firms_hotspots.csv  # Bundled 7-day MODIS export (1 770 hotspots)
+│   │   └── firms_hotspots.csv  # Bundled 7-day MODIS export (1,770 hotspots)
 │   └── README.md
 │
 ├── models/
@@ -208,13 +202,8 @@ INSIGHT-Kalimantan/
 │
 ├── assets/
 │   ├── geo/
-│   │   └── kalimantan_land.geojson   # Kalimantan land polygon
+│   │   └── kalimantan_land.geojson
 │   └── icons/
-│       ├── orangutan.svg
-│       ├── proboscis-monkey.svg
-│       ├── rafflesia.svg
-│       ├── nepenthes.svg
-│       └── default.svg
 │
 ├── notebooks/
 │   ├── 00_quickstart.ipynb
@@ -223,21 +212,12 @@ INSIGHT-Kalimantan/
 │   └── 03_ca_prototype.ipynb
 │
 ├── tests/                      # 69 unit tests (pytest)
-│   ├── test_ca.py
-│   ├── test_features.py
-│   ├── test_ml_wiring.py
-│   ├── test_mitigation.py
-│   ├── test_land_mask.py
-│   ├── test_icons.py
-│   ├── test_smoke.py
-│   └── ...
 │
 ├── requirements.txt            # Runtime dependencies
 ├── requirements-dev.txt        # Dev/test dependencies
-├── pyproject.toml
-├── Makefile
-├── RUNNING.md                  # Detailed run instructions
-├── DATA-SOURCES.md             # Data provenance and licenses
+├── CHANGELOG.md
+├── RUNNING.md
+├── DATA-SOURCES.md
 └── LICENSE
 ```
 
@@ -245,52 +225,46 @@ INSIGHT-Kalimantan/
 
 ## How It Works
 
-The simulation has two connected parts that share the same geographic grid.
+### Cellular Automaton
 
-### Cellular Automaton (CA)
+Each cell on the grid can be in one of five states:
 
 ```
-State machine per cell:
-  healthy ──► igniting ──► burning ──► burned
-  peat_risk ──► igniting ──► burning ──► burned
+healthy --> igniting --> burning --> burned
+peat_risk --> igniting --> burning --> burned
 ```
 
-Each cell on a **~4 km × 4 km grid** can be `healthy`, `igniting`, `burning`, `burned`, or `peat_risk`. At every time step:
+At every time step, burning cells may ignite their 8 neighbors (Moore neighborhood). The ignition probability for each src -> dst edge is:
 
-1. All currently `burning` / `igniting` cells transition to `burned`
-2. Each burning cell probabilistically ignites its **8-neighborhood** (Moore) neighbors
+```
+P = P_base + wind_alignment_strength * wind_alignment + peat_influence * peat_flag
+```
 
-The ignition probability for a given src → dst edge is:
-
-$$P = P_{\text{base}} + \alpha \cdot \text{wind\_alignment} + \beta \cdot \text{peat\_flag}$$
-
-| Parameter | Default | Meaning |
+| Parameter | Default | Description |
 |---|---|---|
 | `P_base` | 0.15 | Base spread probability |
-| `α` (wind strength) | 0.25 | Extra probability when neighbor lies downwind |
-| `β` (peat influence) | 0.20 | Extra probability when neighbor is peat-risk land |
+| `wind_alignment_strength` | 0.25 | Extra probability when neighbor lies downwind |
+| `peat_influence` | 0.20 | Extra probability when neighbor is peat-risk land |
 
-Wind alignment is computed from the meteorological convention (direction fire blows *from*), so a wind from the east pushes the fire westward. Rivers and water bodies from OSM act as natural firebreaks — those cells are marked non-burnable.
+Wind alignment uses the meteorological convention (direction fire blows *from*). OSM water bodies act as firebreaks — those cells are marked non-burnable.
 
 ### Machine Learning Risk Model
 
-A **Random Forest** (200 trees, max depth 8) trained on MODIS fire hotspot data predicts the probability of fire presence for each cell-day.
+A Random Forest (200 trees, max depth 8) trained on MODIS hotspot data predicts the probability of fire presence for each cell-day.
 
-**Features:**
 | Feature | Description |
 |---|---|
 | `peat_risk_flag` | OSM-derived peat land flag |
-| `distance_to_nearest_water_cell` | Proximity to rivers/lakes (cells) |
-| `distance_to_nearest_settlement_cell` | Proximity to villages/towns (cells) |
+| `distance_to_nearest_water_cell` | Proximity to rivers/lakes in cells |
+| `distance_to_nearest_settlement_cell` | Proximity to villages/towns in cells |
 | `wind_alignment` | How much the cell lies downwind |
 | `has_hotspot_last_1_day` | Binary: hotspot in the last 1 day |
 | `has_hotspot_last_3_days` | Binary: hotspot in the last 3 days |
 | `has_hotspot_last_7_days` | Binary: hotspot in the last 7 days |
 | `hotspot_count_last_7_days` | Count of hotspots in 7-day window |
 | `distance_to_nearest_hotspot_cell` | Proximity to the nearest recent hotspot |
-| `cell_row`, `cell_col` | Grid position |
 
-The ML risk map seeds and modulates the CA. When no trained model is present the app falls back to a physics heuristic (wind + peat + settlement/water distances) and says so in the sidebar.
+When no trained model is present the app falls back to a physics heuristic and says so in the sidebar.
 
 ### Civilian Mitigation Guidance
 
@@ -298,24 +272,24 @@ When the CA predicts fire approaching a rural or settlement cell, the app classi
 
 | Risk level | Trigger | Example actions |
 |---|---|---|
-| 🟡 **LOW** | Predicted risk > 0.2 | Prepare evacuation route, clear dry debris |
-| 🟠 **MEDIUM** | Igniting cell within 3 cells | Alert neighbors, wet the perimeter, protect peat areas |
-| 🔴 **HIGH** | Burning cell within 1 cell, or risk > 0.5 | Evacuate early, contact authorities, secure livestock |
+| LOW | Predicted risk > 0.2 | Prepare evacuation route, clear dry debris |
+| MEDIUM | Igniting cell within 3 cells | Alert neighbors, wet the perimeter, protect peat areas |
+| HIGH | Burning cell within 1 cell, or risk > 0.5 | Evacuate early, contact authorities, secure livestock |
 
 Users can enter their own latitude/longitude to receive personalised advice for their location.
 
-> ⚠️ **These are demonstration actions for a science project. They are not emergency advice.**
+**These are demonstration actions for a science project. They are not emergency advice.**
 
 ### Biodiversity Layer
 
-The app fetches research-grade observations from the **iNaturalist API** for four flagship Kalimantan taxa and overlays them on the fire map. The convex hull of each taxon's observation points is drawn as a dashed polygon to show the species' range relative to the simulated fire path.
+The app fetches research-grade observations from the iNaturalist API for four flagship Kalimantan taxa and overlays them on the fire map. The convex hull of each taxon's observation points shows the species range relative to the simulated fire path.
 
-| Taxon | Marker color |
+| Taxon | Color |
 |---|---|
-| Orangutan | Violet `#7b3ff2` |
-| Proboscis monkey | Cyan `#00c2d1` |
-| Rafflesia arnoldii | Magenta `#e91ec4` |
-| Nepenthes (pitcher plants) | Lime `#b5e61d` |
+| Orangutan | Violet |
+| Proboscis monkey | Cyan |
+| Rafflesia arnoldii | Magenta |
+| Nepenthes (pitcher plants) | Lime |
 
 An offline JSON fixture (`src/bio_stub_fixture.json`) is used as fallback when the API is unavailable.
 
@@ -327,30 +301,30 @@ An offline JSON fixture (`src/bio_stub_fixture.json`) is used as fallback when t
 |---|---|---|
 | [OpenStreetMap](https://www.openstreetmap.org/) via [Overpass API](https://overpass-api.de/) | Land cover, water, roads, settlements | ODbL |
 | [NASA FIRMS](https://firms.modaps.eosdis.nasa.gov/) (MODIS/VIIRS) | Fire hotspot labels and CA seeding | NASA data use terms |
-| [iNaturalist](https://www.inaturalist.org/) API v2 | Flora & fauna observation layer | CC0 / CC-BY / CC-BY-NC per observer |
+| [iNaturalist](https://www.inaturalist.org/) API v2 | Flora and fauna observation layer | CC0 / CC-BY / CC-BY-NC per observer |
 | Kalimantan GeoJSON (`assets/geo/`) | Land mask for the Kalimantan-wide map | Derived from OSM |
 
 See [`DATA-SOURCES.md`](DATA-SOURCES.md) for full details, download steps, and license notes.
 
-**Demo bounding box:** `(112.5°E, 3.5°S) → (114.5°E, 1.5°S)` — Central Kalimantan around Palangkaraya, Sebangau, and the Kahayan peatland forest.
+**Demo bounding box:** `(112.5E, 3.5S) to (114.5E, 1.5S)` — Central Kalimantan around Palangkaraya, Sebangau, and the Kahayan peatland forest.
 
 ---
 
 ## Model Performance
 
-Trained on the bundled 7-day MODIS export (**1,770 hotspots** in the demo box, **26,912 cell-days**, **3.24% positive rate**) with a **temporal split** (last 2 days as test set):
+Trained on the bundled 7-day MODIS export (1,770 hotspots in the demo box, 26,912 cell-days, 3.24% positive rate) with a temporal split (last 2 days as test set):
 
 | Metric | Value |
 |---|---|
-| **ROC-AUC** | **0.883** |
-| **PR-AUC** | **0.283** |
+| ROC-AUC | 0.883 |
+| PR-AUC | 0.283 |
 | Accuracy | 0.975 |
 | Precision | 0.443 |
 | Recall | 0.166 |
 | Test rows | 6,728 |
 | Test positives | 163 |
 
-A PR-AUC of 0.283 over a 3.2% base rate means the **top-ranked cells are roughly 9× more likely to burn than average**. This is a genuine signal, not overfitting — the split is temporal, not random.
+A PR-AUC of 0.283 over a 3.2% base rate means the top-ranked cells are roughly 9x more likely to burn than average. The split is temporal, not random, so the metric reflects genuine out-of-sample prediction.
 
 ---
 
@@ -367,12 +341,12 @@ _MAX_LON, _MAX_LAT = 114.5, -1.5
 _GRID_SPACING_DEG = 0.035
 
 # CA parameters
-CA_SPREAD_BASE            = 0.15   # base ignition probability
-CA_WIND_ALIGNMENT_STRENGTH = 0.25  # wind bonus
-CA_PEAT_INFLUENCE          = 0.20  # peat bonus
+CA_SPREAD_BASE             = 0.15   # base ignition probability
+CA_WIND_ALIGNMENT_STRENGTH = 0.25   # wind bonus
+CA_PEAT_INFLUENCE          = 0.20   # peat bonus
 
 # Default wind direction (meteorological: degrees FROM)
-DEFAULT_WIND_DIR_DEG = 90.0        # from the east
+DEFAULT_WIND_DIR_DEG = 90.0         # from the east
 
 # ML
 ML_MODEL_TYPE    = "random_forest"
@@ -384,7 +358,7 @@ ML_TEST_FRACTION = 0.20
 ## Tests
 
 ```bash
-# Install dev dependencies (pytest etc.)
+# Install dev dependencies
 pip install -r requirements-dev.txt
 
 # Run all 69 tests
@@ -397,14 +371,14 @@ Tests cover the CA step logic, feature engineering, ML wiring, mitigation rule e
 
 ## Limitations
 
-This is a **1-month high-school science project prototype**. Known limitations:
+This is a one-month high-school science project prototype. Known limitations:
 
-- **Simplified physics:** the CA is a teaching model, not an operational fire spread model (e.g., no fuel moisture, no terrain slope, no ember transport)
-- **Demo bounding box only:** the CA runs on a small 2° × 2° area; the Kalimantan-wide map is a fast heuristic, not the full model
-- **Wind is static:** the default simulation uses a single wind direction for all steps; real fire spread varies hour by hour
-- **ML baseline:** the Random Forest is intentionally simple (200 trees, depth 8) and trained on a small 7-day export
-- **Civilian guidance is illustrative:** the mitigation actions are demonstration rules for a science project and are not vetted emergency advice
-- **Data completeness:** OSM coverage in rural Central Kalimantan may be incomplete; peat masks are approximated from land-cover tags
+- **Simplified physics.** The CA is a teaching model, not an operational fire spread model. It has no fuel moisture, terrain slope, or ember transport.
+- **Demo bounding box only.** The CA runs on a small 2 x 2 degree area. The Kalimantan-wide map is a fast heuristic, not the full model.
+- **Static wind.** The default simulation uses a single wind direction for all steps.
+- **Baseline ML.** The Random Forest is intentionally simple and trained on a small 7-day export.
+- **Illustrative guidance.** The civilian mitigation actions are demonstration rules for a science project and are not vetted emergency advice.
+- **Data completeness.** OSM coverage in rural Central Kalimantan may be incomplete. Peat masks are approximated from land-cover tags.
 
 ---
 
@@ -412,4 +386,4 @@ This is a **1-month high-school science project prototype**. Known limitations:
 
 See [`LICENSE`](LICENSE) for the full text.
 
-> **Note:** This project is a science-fair prototype. It is not an emergency response system. Do not use its outputs to make real fire management or evacuation decisions.
+This project is a science-fair prototype. It is not an emergency response system. Do not use its outputs to make real fire management or evacuation decisions.
