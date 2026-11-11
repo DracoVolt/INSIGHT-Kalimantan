@@ -266,6 +266,85 @@ def _css(panel_open: bool) -> str:
         }}
         .insight-fold-tab {{ left: 14px; }}
     }}
+
+    /* --- Pull to Refresh indicator ------------------------------ */
+    .insight-ptr {{
+        position: fixed;
+        top: 0;
+        left: 50%;
+        transform: translate(-50%, -100%);
+        z-index: 2500;
+        pointer-events: none;
+        transition: transform 0.22s cubic-bezier(0.18, 0.89, 0.32, 1.28), opacity 0.2s ease;
+        opacity: 0;
+    }}
+    .insight-ptr.ptr-active {{
+        opacity: 1;
+        pointer-events: auto;
+    }}
+    .insight-ptr.ptr-refreshing {{
+        opacity: 1;
+        transform: translate(-50%, 18px) !important;
+        pointer-events: auto;
+    }}
+    .insight-ptr-pill {{
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 18px;
+        border-radius: 999px;
+        background: rgba(8, 13, 18, 0.92);
+        backdrop-filter: blur(16px) saturate(160%);
+        -webkit-backdrop-filter: blur(16px) saturate(160%);
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 14px rgba(56, 189, 248, 0.2);
+        color: #e6eef6;
+        font: 600 12px/1.2 system-ui, -apple-system, sans-serif;
+        letter-spacing: 0.04em;
+        cursor: pointer;
+        user-select: none;
+        -webkit-user-select: none;
+        touch-action: none;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.1s ease;
+    }}
+    .insight-ptr-pill:active {{
+        transform: scale(0.97);
+    }}
+    .insight-ptr-icon {{
+        width: 14px;
+        height: 14px;
+        color: #38bdf8;
+        transition: transform 0.2s ease-out, color 0.2s ease;
+        display: inline-block;
+        vertical-align: middle;
+    }}
+    .insight-ptr-spinner {{
+        width: 14px;
+        height: 14px;
+        color: #38bdf8;
+        display: none;
+        vertical-align: middle;
+    }}
+    .ptr-ready .insight-ptr-icon {{
+        transform: rotate(180deg);
+        color: #4ade80;
+    }}
+    .ptr-ready .insight-ptr-pill {{
+        border-color: rgba(74, 222, 128, 0.5);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 16px rgba(74, 222, 128, 0.35);
+    }}
+    .ptr-refreshing .insight-ptr-icon {{
+        display: none;
+    }}
+    .ptr-refreshing .insight-ptr-spinner {{
+        display: inline-block;
+        animation: insight-ptr-spin 0.85s linear infinite;
+        color: #38bdf8;
+    }}
+    @keyframes insight-ptr-spin {{
+        from {{ transform: rotate(0deg); }}
+        to {{ transform: rotate(360deg); }}
+    }}
     </style>
     """
 
@@ -281,9 +360,239 @@ def _fold_handle_html() -> str:
     )
 
 
+def _pull_to_refresh_html() -> str:
+    """Pull to refresh indicator pill HTML markup."""
+    return """
+    <div id="insight-ptr" class="insight-ptr" role="status" aria-live="polite">
+        <div class="insight-ptr-pill" title="Click or pull down to refresh simulation">
+            <svg class="insight-ptr-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+            </svg>
+            <svg class="insight-ptr-spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+            </svg>
+            <span id="insight-ptr-text" class="insight-ptr-text">Pull to refresh</span>
+        </div>
+    </div>
+    """
+
+
+def _pull_to_refresh_js() -> str:
+    """Client-side touch and mouse gesture listener for pull-to-refresh."""
+    return """
+    <script>
+    (function initPullToRefresh() {
+        var win = window.parent || window;
+        var doc = win.document;
+
+        if (win.__insight_ptr_initialized) return;
+        win.__insight_ptr_initialized = true;
+
+        var startY = 0;
+        var startX = 0;
+        var isPulling = false;
+        var canPull = false;
+        var isRefreshing = false;
+        var isMouseDown = false;
+
+        function getPtr() {
+            return doc.getElementById('insight-ptr');
+        }
+        function getText() {
+            return doc.getElementById('insight-ptr-text');
+        }
+
+        function triggerRefresh() {
+            if (isRefreshing) return;
+            isRefreshing = true;
+
+            var ptr = getPtr();
+            var txt = getText();
+            if (ptr) {
+                ptr.classList.remove('ptr-ready', 'ptr-active');
+                ptr.classList.add('ptr-refreshing');
+                ptr.style.transform = 'translate(-50%, 18px)';
+            }
+            if (txt) {
+                txt.textContent = 'Refreshing simulation...';
+            }
+
+            setTimeout(function() {
+                var buttons = doc.querySelectorAll('button');
+                var runBtn = null;
+                for (var i = 0; i < buttons.length; i++) {
+                    var label = (buttons[i].innerText || buttons[i].textContent || '').trim().toLowerCase();
+                    if (label.indexOf('run simulation') !== -1) {
+                        runBtn = buttons[i];
+                        break;
+                    }
+                }
+                if (runBtn) {
+                    runBtn.click();
+                    setTimeout(function() {
+                        resetPtr();
+                    }, 2500);
+                } else {
+                    win.location.reload();
+                }
+            }, 300);
+        }
+
+        function resetPtr() {
+            isRefreshing = false;
+            isPulling = false;
+            canPull = false;
+            isMouseDown = false;
+            var ptr = getPtr();
+            var txt = getText();
+            if (ptr) {
+                ptr.classList.remove('ptr-active', 'ptr-ready', 'ptr-refreshing');
+                ptr.style.transform = 'translate(-50%, -100%)';
+            }
+            if (txt) {
+                txt.textContent = 'Pull to refresh';
+            }
+        }
+
+        // Touch events
+        win.addEventListener('touchstart', function(e) {
+            if (isRefreshing || e.touches.length !== 1) return;
+            var touch = e.touches[0];
+            startY = touch.clientY;
+            startX = touch.clientX;
+
+            var target = e.target;
+            var scrollParent = target.closest ? target.closest('.st-key-windy_controls, .st-key-emergency_panel, [data-testid="stMain"]') : null;
+            var atTop = (!scrollParent || scrollParent.scrollTop <= 0);
+
+            var isMap = target.closest && target.closest('.leaflet-container, iframe');
+            if (isMap && touch.clientY > 80) {
+                canPull = false;
+                return;
+            }
+
+            if (atTop && touch.clientY <= 140) {
+                canPull = true;
+                isPulling = false;
+            } else {
+                canPull = false;
+            }
+        }, { passive: true });
+
+        win.addEventListener('touchmove', function(e) {
+            if (!canPull || isRefreshing || e.touches.length !== 1) return;
+            var touch = e.touches[0];
+            var dy = touch.clientY - startY;
+            var dx = Math.abs(touch.clientX - startX);
+
+            if (dy > 10 && dy > dx * 1.1) {
+                isPulling = true;
+                var pull = Math.min(Math.pow(dy, 0.82) * 1.8, 85);
+                var ptr = getPtr();
+                var txt = getText();
+
+                if (ptr) {
+                    ptr.classList.add('ptr-active');
+                    ptr.style.transform = 'translate(-50%, ' + (pull - 42) + 'px)';
+                    if (pull >= 54) {
+                        ptr.classList.add('ptr-ready');
+                        if (txt) txt.textContent = 'Release to refresh';
+                    } else {
+                        ptr.classList.remove('ptr-ready');
+                        if (txt) txt.textContent = 'Pull to refresh';
+                    }
+                }
+            }
+        }, { passive: true });
+
+        win.addEventListener('touchend', function(e) {
+            if (!canPull || !isPulling || isRefreshing) {
+                canPull = false;
+                isPulling = false;
+                return;
+            }
+            var ptr = getPtr();
+            if (ptr && ptr.classList.contains('ptr-ready')) {
+                triggerRefresh();
+            } else {
+                resetPtr();
+            }
+        }, { passive: true });
+
+        // Desktop mouse drag support
+        win.addEventListener('mousedown', function(e) {
+            if (isRefreshing || e.button !== 0) return;
+            if (e.clientY <= 60 || (e.target && e.target.closest && e.target.closest('.insight-fold-tab, .insight-ptr-pill'))) {
+                isMouseDown = true;
+                startY = e.clientY;
+                startX = e.clientX;
+                canPull = true;
+                isPulling = false;
+            }
+        });
+
+        win.addEventListener('mousemove', function(e) {
+            if (!isMouseDown || !canPull || isRefreshing) return;
+            var dy = e.clientY - startY;
+            var dx = Math.abs(e.clientX - startX);
+
+            if (dy > 10 && dy > dx * 1.1) {
+                isPulling = true;
+                var pull = Math.min(Math.pow(dy, 0.82) * 1.8, 85);
+                var ptr = getPtr();
+                var txt = getText();
+                if (ptr) {
+                    ptr.classList.add('ptr-active');
+                    ptr.style.transform = 'translate(-50%, ' + (pull - 42) + 'px)';
+                    if (pull >= 54) {
+                        ptr.classList.add('ptr-ready');
+                        if (txt) txt.textContent = 'Release to refresh';
+                    } else {
+                        ptr.classList.remove('ptr-ready');
+                        if (txt) txt.textContent = 'Pull to refresh';
+                    }
+                }
+            }
+        });
+
+        win.addEventListener('mouseup', function(e) {
+            if (!isMouseDown) return;
+            isMouseDown = false;
+            if (!canPull || !isPulling || isRefreshing) {
+                canPull = false;
+                isPulling = false;
+                return;
+            }
+            var ptr = getPtr();
+            if (ptr && ptr.classList.contains('ptr-ready')) {
+                triggerRefresh();
+            } else {
+                resetPtr();
+            }
+        });
+
+        // Direct click on pill to refresh
+        doc.addEventListener('click', function(e) {
+            var pill = e.target.closest ? e.target.closest('.insight-ptr-pill') : null;
+            if (pill) {
+                triggerRefresh();
+            }
+        });
+    })();
+    </script>
+    """
+
+
 def inject_layout_css(panel_open: bool = True) -> None:
-    """Write the shell CSS and the fold handle into the page."""
+    """Write the shell CSS, fold handle and pull-to-refresh into the page."""
     import streamlit as st
 
     st.markdown(_css(panel_open), unsafe_allow_html=True)
     st.markdown(_fold_handle_html(), unsafe_allow_html=True)
+    st.markdown(_pull_to_refresh_html(), unsafe_allow_html=True)
+    try:
+        import streamlit.components.v1 as components
+        components.html(_pull_to_refresh_js(), height=0, width=0)
+    except Exception:
+        pass
