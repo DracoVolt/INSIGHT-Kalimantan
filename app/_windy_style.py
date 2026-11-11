@@ -135,6 +135,48 @@ def _css(panel_open: bool) -> str:
         padding: 6px 18px 4px;
         transition: left .25s ease, right .25s ease;
     }}
+    /* Bottom searchbar inside the CA timeline bar */
+    .st-key-windy_timeline [data-testid="stTextInput"] {{
+        margin: 0 !important;
+        padding: 0 !important;
+    }}
+    .st-key-windy_timeline [data-baseweb="input"] {{
+        background: rgba(255, 255, 255, 0.07) !important;
+        border: 1px solid rgba(255, 255, 255, 0.12) !important;
+        border-radius: 10px !important;
+        height: 30px !important;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }}
+    .st-key-windy_timeline [data-baseweb="input"] input {{
+        color: #e6eef6 !important;
+        font-size: 11.5px !important;
+        padding: 2px 10px !important;
+    }}
+    .st-key-windy_timeline [data-baseweb="input"] input::placeholder {{
+        color: #8fa3b5 !important;
+        font-size: 11px !important;
+    }}
+    .st-key-windy_timeline [data-baseweb="input"]:focus-within {{
+        border-color: rgba(56, 189, 248, 0.65) !important;
+        box-shadow: 0 0 12px rgba(56, 189, 248, 0.22) !important;
+    }}
+    .st-key-windy_timeline [data-testid="stCaptionContainer"] p {{
+        font-size: 11px !important;
+        line-height: 1.25 !important;
+        margin: 0 !important;
+        color: #9fb2c4 !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }}
+    .st-key-windy_timeline [data-testid="stCheckbox"] {{
+        margin: 0 !important;
+        padding: 0 !important;
+    }}
+    .st-key-windy_timeline [data-testid="stCheckbox"] label span {{
+        font-size: 11px !important;
+        color: #c0d3e5 !important;
+    }}
     {panel_rules}
 
     /* --- Foldable left and right panels, with bookmark tabs -------- */
@@ -217,6 +259,44 @@ def _css(panel_open: bool) -> str:
     }}
     .st-key-emergency_panel h4 {{
         font-size: .9rem !important; margin: .6rem 0 .1rem 0 !important;
+    }}
+    .emergency-panel-header {{
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 2px;
+    }}
+    .emergency-panel-header h3 {{
+        margin: 0 !important;
+        font-size: 1.02rem !important;
+        display: inline-block;
+    }}
+    .emergency-close-btn {{
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 24px;
+        height: 24px;
+        border-radius: 7px;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        color: #9fb2c4;
+        font-size: 13px;
+        font-weight: 600;
+        line-height: 1;
+        cursor: pointer;
+        user-select: none;
+        -webkit-user-select: none;
+        transition: all 0.15s ease;
+    }}
+    .emergency-close-btn:hover {{
+        background: rgba(239, 68, 68, 0.25);
+        border-color: rgba(239, 68, 68, 0.5);
+        color: #fca5a5;
+    }}
+    .emergency-close-btn:active {{
+        transform: scale(0.92);
     }}
     .st-key-windy_controls [data-testid="stExpander"] details,
     .st-key-emergency_panel [data-testid="stExpander"] details {{
@@ -639,8 +719,3 @@ def inject_layout_css(panel_open: bool = True) -> None:
     st.markdown(_css(panel_open), unsafe_allow_html=True)
     st.markdown(_fold_handle_html(), unsafe_allow_html=True)
     st.markdown(_pull_to_refresh_html(), unsafe_allow_html=True)
-    try:
-        import streamlit.components.v1 as components
-        components.html(_pull_to_refresh_js(), height=0, width=0)
-    except Exception:
-        pass

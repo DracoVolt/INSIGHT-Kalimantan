@@ -801,10 +801,75 @@ def _render_kalimantan_risk_map(
     st_folium(m, use_container_width=True, height=700)
 
 
+KNOWN_SEARCH_TARGETS: Dict[str, Tuple[float, float, str]] = {
+    "palangkaraya": (-2.2096, 113.9213, "Palangka Raya (City Center)"),
+    "palangka raya": (-2.2096, 113.9213, "Palangka Raya (City Center)"),
+    "sebangau": (-2.5500, 113.8500, "Sebangau National Park"),
+    "taman nasional sebangau": (-2.5500, 113.8500, "Sebangau National Park"),
+    "kahayan": (-2.1000, 113.9500, "Kahayan River Basin"),
+    "sungai kahayan": (-2.1000, 113.9500, "Kahayan River"),
+    "pulang pisau": (-2.7500, 114.2500, "Pulang Pisau"),
+    "kasongan": (-1.9000, 113.3800, "Kasongan (Katingan)"),
+    "katingan": (-1.9000, 113.3800, "Katingan Area"),
+    "sampit": (-2.5300, 112.9500, "Sampit"),
+    "kuala kapuas": (-3.0100, 114.3900, "Kuala Kapuas"),
+    "kapuas": (-3.0100, 114.3900, "Kuala Kapuas"),
+    "orangutan": (-2.4500, 113.7800, "Orangutan Habitat (Sebangau)"),
+    "bekantan": (-2.8500, 114.1000, "Proboscis Monkey Sanctuary"),
+    "proboscis": (-2.8500, 114.1000, "Proboscis Monkey Sanctuary"),
+    "proboscis monkey": (-2.8500, 114.1000, "Proboscis Monkey Sanctuary"),
+    "rafflesia": (-1.8500, 113.2000, "Rafflesia Arnoldii Location"),
+    "nepenthes": (-2.3000, 113.6000, "Nepenthes Pitcher Plants"),
+    "kantong semar": (-2.3000, 113.6000, "Nepenthes Pitcher Plants"),
+}
+
+
+def resolve_search_target(query: str) -> Optional[Tuple[float, float, str]]:
+    """Parse search query into (lat, lon, label) if valid or matched."""
+    import re
+    q = (query or "").strip().lower()
+    if not q:
+        return None
+
+    # 1. Named landmarks / species
+    for key, target in KNOWN_SEARCH_TARGETS.items():
+        if key in q or q in key:
+            return target
+
+    # 2. Grid cell format e.g. "cell 12, 20" or "(12, 20)" or "12, 20"
+    cell_match = re.match(r"^(?:cell\s*)?\(?\s*(\d{1,2})\s*,\s*(\d{1,2})\s*\)?$", q)
+    if cell_match:
+        r, c = int(cell_match.group(1)), int(cell_match.group(2))
+        try:
+            clat, clon = cell_center_lat_lon(r, c)
+            return (clat, clon, f"Cell ({r}, {c})")
+        except Exception:
+            pass
+
+    # 3. Direct coordinates (lat, lon) e.g. "-2.21, 113.92"
+    coord_match = re.match(r"^([+-]?\d+(?:\.\d+)?)[,\s]+([+-]?\d+(?:\.\d+)?)$", q)
+    if coord_match:
+        try:
+            val1 = float(coord_match.group(1))
+            val2 = float(coord_match.group(2))
+            if -15.0 <= val1 <= 10.0 and 90.0 <= val2 <= 150.0:
+                lat, lon = val1, val2
+            elif 90.0 <= val1 <= 150.0 and -15.0 <= val2 <= 10.0:
+                lat, lon = val2, val1
+            else:
+                lat, lon = val1, val2
+            return (lat, lon, f"Coordinates ({lat:.3f}, {lon:.3f})")
+        except ValueError:
+            pass
+
+    return None
+
+
 def _render_risk_map_folium(
     risk: Any,
     bbox: Tuple[float, float, float, float],
     bio_layers: Any = None,
+    search_target: Optional[Tuple[float, float, str]] = None,
 ) -> None:
     """Render the ML risk map as a folium map with an Indonesia zoom cap."""
     min_lon, min_lat, max_lon, max_lat = bbox
@@ -842,7 +907,35 @@ def _render_risk_map_folium(
     # Windy-style hero: frame the demo box so the model's cells fill the map
     # instead of floating in a Borneo-wide view. Padding keeps the box clear of
     # the floating panels on wide screens.
-    m.fit_bounds([[min_lat, min_lon], [max_lat, max_lon]], padding=(30, 30))
+    if search_target is not None:
+        s_lat, s_lon, s_label = search_target
+        folium.CircleMarker(
+            location=[s_lat, s_lon],
+            radius=9,
+            color="#ffffff",
+            weight=2.5,
+            fill=True,
+            fill_color="#0284c7",
+            fill_opacity=0.9,
+            popup=folium.Popup(f"<b>{s_label}</b><br>Lat: {s_lat:.4f}, Lon: {s_lon:.4f}", max_width=250),
+            tooltip=f"📍 {s_label}",
+        ).add_to(m)
+        folium.Circle(
+            location=[s_lat, s_lon],
+            radius=2000,
+            color="#38bdf8",
+            weight=1.5,
+            dash_array="5, 5",
+            fill=True,
+            fill_color="#38bdf8",
+            fill_opacity=0.15,
+        ).add_to(m)
+        m.fit_bounds(
+            [[s_lat - 0.12, s_lon - 0.12], [s_lat + 0.12, s_lon + 0.12]],
+            padding=(20, 20),
+        )
+    else:
+        m.fit_bounds([[min_lat, min_lon], [max_lat, max_lon]], padding=(30, 30))
 
     # One raster instead of 3,364 markers: same surface, ~10 KB of map HTML.
     folium.raster_layers.ImageOverlay(
@@ -1077,6 +1170,7 @@ def run_streamlit() -> None:
         st.warning("Could not initialize the simulation. Check data files and try again.")
         return
 
+    search_target = None
     with timeline:
         step_idx = st.slider(
             "CA step",
@@ -1087,19 +1181,54 @@ def run_streamlit() -> None:
             key="ca_step_slider",
             label_visibility="collapsed",
         )
-        step_col, play_col = st.columns([3, 1])
-        with step_col:
+        ctrl_search, ctrl_step, ctrl_play = st.columns([3, 2, 1], vertical_alignment="center", gap="small")
+        with ctrl_search:
+            search_query = st.text_input(
+                "Search map",
+                placeholder="🔍 Search place, species, or lat,lon...",
+                label_visibility="collapsed",
+                key="ca_search_query",
+            )
+        with ctrl_step:
             st.caption(
                 f"Step {step_idx} / {len(state.frames) - 1} · "
                 f"wind {state.params.wind_dir_deg:.0f}°"
             )
-        with play_col:
+        with ctrl_play:
             auto_play = st.checkbox("Auto-play", value=False, key="auto_play")
 
     if auto_play:
         step_idx = int(min(len(state.frames) - 1, step_idx + 1))
 
     current_frame = state.frames[step_idx]
+
+    if search_query:
+        search_target = resolve_search_target(search_query)
+        with timeline:
+            if search_target:
+                s_lat, s_lon, s_label = search_target
+                cell_info = ""
+                try:
+                    sr, sc = loc_to_cell(s_lat, s_lon)
+                    cur_cell_state = (
+                        current_frame[sr, sc]
+                        if (0 <= sr < current_frame.shape[0] and 0 <= sc < current_frame.shape[1])
+                        else None
+                    )
+                    risk_val = (
+                        state.risk_map[sr, sc]
+                        if (state.risk_map is not None and 0 <= sr < state.risk_map.shape[0] and 0 <= sc < state.risk_map.shape[1])
+                        else None
+                    )
+                    state_names = {0: "Unburned", 1: "Burning 🔥", 2: "Burned"}
+                    s_str = state_names.get(cur_cell_state, f"State {cur_cell_state}")
+                    r_str = f"· Risk {risk_val:.2f}" if risk_val is not None else ""
+                    cell_info = f" · Cell ({sr}, {sc}): {s_str} {r_str}"
+                except Exception:
+                    cell_info = " · (Outside demo grid)"
+                st.caption(f"📍 **{s_label}** ({s_lat:.3f}, {s_lon:.3f}){cell_info}")
+            else:
+                st.caption(f"No match for '{search_query}'. Try: Palangka Raya, Sebangau, Orangutan, cell 12,20, or lat,lon")
 
     # Panel content that needs the simulation state.
     with controls:
@@ -1114,7 +1243,7 @@ def run_streamlit() -> None:
     # float, so order is irrelevant, but on phones the emergency panel drops
     # into the flow and would otherwise push the map a few thousand pixels
     # down the page. Map first, mitigation list under it, layers last.
-    _render_map(state, show_bio_overlay=show_bio_overlay)
+    _render_map(state, show_bio_overlay=show_bio_overlay, search_target=search_target)
 
     # Emergency content floats on the right; when switched off it is not
     # rendered at all, so nothing frames the map.
@@ -1147,7 +1276,11 @@ def _render_risk_provenance(state: Any) -> None:
     st.caption(" · ".join(bits))
 
 
-def _render_map(state: Any, show_bio_overlay: bool = True) -> None:
+def _render_map(
+    state: Any,
+    show_bio_overlay: bool = True,
+    search_target: Optional[Tuple[float, float, str]] = None,
+) -> None:
     """The full-bleed risk map: the page itself on every screen size."""
     if state.risk_map is not None:
         with st.container(key="windy_map"):
@@ -1158,6 +1291,7 @@ def _render_map(state: Any, show_bio_overlay: bool = True) -> None:
                     state.risk_map,
                     config.bounding_box(),
                     bio_layers=(state.bio_layers if (show_bio_overlay and getattr(state, "bio_layers", None)) else None),
+                    search_target=search_target,
                 )
     else:
         st.warning("Risk map unavailable.")
