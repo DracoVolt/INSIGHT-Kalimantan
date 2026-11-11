@@ -1203,7 +1203,13 @@ def _render_layers(state: Any, show_bio_overlay: bool = True) -> None:
 
 def _render_emergency_panel(state: Any) -> None:
     """Right-hand emergency panel: location, nearby risk, mitigation tiles."""
-    st.markdown("### 🚨 Emergency & mitigation")
+    st.markdown(
+        "<div class='emergency-panel-header'>"
+        "<h3>🚨 Emergency &amp; mitigation</h3>"
+        "<label class='emergency-close-btn' for='insight-emergency-fold' title='Close panel'>&#10005;</label>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
     st.caption(
         f"Live guidance for CA step {state.current_step}. "
         "Prototype only — not an emergency response system."
