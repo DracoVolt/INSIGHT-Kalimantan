@@ -5,12 +5,21 @@ from __future__ import annotations
 from app._windy_style import _css, _fold_handle_html, _pull_to_refresh_html, _pull_to_refresh_js
 
 
-def test_css_contains_ptr_styles():
+def test_fold_handles_include_left_and_right():
+    html = _fold_handle_html()
+    assert "insight-fold" in html
+    assert "insight-fold-tab" in html
+    assert "Controls" in html
+    assert "insight-emergency-fold" in html
+    assert "insight-emergency-fold-tab" in html
+    assert "Emergency" in html
+
+
+def test_css_contains_emergency_fold_styles():
     css = _css(panel_open=True)
-    assert ".insight-ptr" in css
-    assert "insight-ptr-spin" in css
-    assert "ptr-refreshing" in css
-    assert "ptr-ready" in css
+    assert ".insight-emergency-fold-tab" in css
+    assert "#insight-emergency-fold" in css
+    assert ".st-key-emergency_panel" in css
 
 
 def test_pull_to_refresh_html_markup():

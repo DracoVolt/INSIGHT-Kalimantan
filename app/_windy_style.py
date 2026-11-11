@@ -15,7 +15,7 @@ from __future__ import annotations
 
 
 def _css(panel_open: bool) -> str:
-    panel_rules = "" if panel_open else ".st-key-emergency_panel { display: none !important; }"
+    panel_rules = "" if panel_open else ".st-key-emergency_panel, .insight-emergency-fold-tab { display: none !important; }"
     return f"""
     <style>
     /* --- Mobile platform baseline -------------------------------- */
@@ -38,7 +38,8 @@ def _css(panel_open: bool) -> str:
     [role="button"],
     [data-testid="stBaseButton"],
     [data-testid="stExpander"] summary,
-    .insight-fold-tab {{
+    .insight-fold-tab,
+    .insight-emergency-fold-tab {{
         touch-action: manipulation;
         -webkit-user-select: none;
         user-select: none;
@@ -50,14 +51,16 @@ def _css(panel_open: bool) -> str:
     [role="button"],
     [data-testid="stBaseButton"],
     [data-testid="stExpander"] summary,
-    .insight-fold-tab {{
+    .insight-fold-tab,
+    .insight-emergency-fold-tab {{
         transition: transform 110ms ease-out, background-color 110ms ease-out;
     }}
     button:active,
     [role="button"]:active,
     [data-testid="stBaseButton"]:active,
     [data-testid="stExpander"] summary:active,
-    .insight-fold-tab:active {{
+    .insight-fold-tab:active,
+    .insight-emergency-fold-tab:active {{
         transform: scale(0.97);
     }}
     /* iOS zooms into any input below 16px on focus and never zooms back out.
@@ -130,21 +133,22 @@ def _css(panel_open: bool) -> str:
         left: 340px; right: 360px; bottom: 14px;
         width: auto; transform: none;
         padding: 6px 18px 4px;
+        transition: left .25s ease, right .25s ease;
     }}
     {panel_rules}
 
-    /* --- Foldable left panel, with a bookmark tab ---------------- */
-    /* The tab is a label outside the panel; it toggles the hidden checkbox, so
-       nothing needs JavaScript. On tablets and phones the panel starts folded
-       and the tab is the only thing left on screen, so you always know where
-       the controls are. Browsers without :has() keep the old always-open
-       behaviour. */
-    #insight-fold {{
+    /* --- Foldable left and right panels, with bookmark tabs -------- */
+    /* The tabs are labels outside the panels; they toggle hidden checkboxes,
+       so nothing needs JavaScript. On tablets and phones the panels start folded
+       and the tabs are the only things on screen, leaving the map clear. */
+    #insight-fold,
+    #insight-emergency-fold {{
         position: absolute; width: 1px; height: 1px;
         opacity: 0; pointer-events: none;
     }}
-    .insight-fold-tab {{
-        position: fixed; left: 26px; top: 0; z-index: 1200;
+    .insight-fold-tab,
+    .insight-emergency-fold-tab {{
+        position: fixed; top: 0; z-index: 1200;
         padding: 4px 13px 7px;
         border-radius: 0 0 13px 13px;
         background: rgba(8, 13, 18, 0.88);
@@ -160,19 +164,27 @@ def _css(panel_open: bool) -> str:
         user-select: none;
         -webkit-user-select: none;
         -webkit-tap-highlight-color: transparent;
-        transition: left .25s ease, background .2s ease;
+        transition: left .25s ease, right .25s ease, background .2s ease;
     }}
+    .insight-fold-tab {{ left: 26px; }}
+    .insight-emergency-fold-tab {{ right: 26px; }}
+
     /* Touch has no hover: the browser fakes it on the first tap and leaves it
        stuck there, so hover styles exist only where a real pointer hovers. */
     @media (hover: hover) and (pointer: fine) {{
-        .insight-fold-tab:hover {{ background: rgba(24, 34, 46, 0.96); }}
+        .insight-fold-tab:hover,
+        .insight-emergency-fold-tab:hover {{ background: rgba(24, 34, 46, 0.96); }}
     }}
-    .insight-fold-tab .tab-fold {{ display: inline; }}
-    .insight-fold-tab .tab-unfold {{ display: none; }}
-    .st-key-windy_controls {{
+    .insight-fold-tab .tab-fold,
+    .insight-emergency-fold-tab .tab-fold {{ display: inline; }}
+    .insight-fold-tab .tab-unfold,
+    .insight-emergency-fold-tab .tab-unfold {{ display: none; }}
+    .st-key-windy_controls,
+    .st-key-emergency_panel {{
         transition: transform .25s ease, opacity .2s ease;
     }}
-    /* Wide screens: open by default, the tab folds it. */
+
+    /* Wide screens: open by default, the tabs fold them. */
     @media (min-width: 1181px) {{
         body:has(#insight-fold:checked) .st-key-windy_controls {{
             transform: translateX(calc(-100% - 30px));
@@ -181,6 +193,16 @@ def _css(panel_open: bool) -> str:
         }}
         body:has(#insight-fold:checked) .insight-fold-tab .tab-fold {{ display: none; }}
         body:has(#insight-fold:checked) .insight-fold-tab .tab-unfold {{ display: inline; }}
+        body:has(#insight-fold:checked) .st-key-windy_timeline {{ left: 26px; }}
+
+        body:has(#insight-emergency-fold:checked) .st-key-emergency_panel {{
+            transform: translateX(calc(100% + 30px));
+            opacity: 0;
+            pointer-events: none;
+        }}
+        body:has(#insight-emergency-fold:checked) .insight-emergency-fold-tab .tab-fold {{ display: none; }}
+        body:has(#insight-emergency-fold:checked) .insight-emergency-fold-tab .tab-unfold {{ display: inline; }}
+        body:has(#insight-emergency-fold:checked) .st-key-windy_timeline {{ right: 26px; }}
     }}
 
     /* --- Compact typography inside the panels -------------------- */
@@ -232,11 +254,14 @@ def _css(panel_open: bool) -> str:
         background: rgba(255, 255, 255, 0.02);
     }}
 
-    /* Tablets and phones: a 312 px floating panel covers most of the screen,
-       so it starts folded behind the bookmark tab. */
+    /* Tablets and phones: floating panels start folded behind their bookmark tabs. */
     @media (max-width: 1180px) {{
         .st-key-windy_timeline {{ left: 14px; right: 14px; }}
         .st-key-windy_layers {{ padding: 22px 24px 150px; }}
+
+        .insight-fold-tab {{ left: 14px; }}
+        .insight-emergency-fold-tab {{ right: 14px; }}
+
         body:not(:has(#insight-fold:checked)) .st-key-windy_controls {{
             transform: translateX(calc(-100% - 30px));
             opacity: 0;
@@ -247,24 +272,42 @@ def _css(panel_open: bool) -> str:
             max-height: 70vh;
             max-height: 70dvh;
         }}
-        /* The panel starts folded, so the tab offers the unfold action. */
         .insight-fold-tab .tab-fold {{ display: none; }}
         .insight-fold-tab .tab-unfold {{ display: inline; }}
         body:has(#insight-fold:checked) .insight-fold-tab .tab-fold {{ display: inline; }}
         body:has(#insight-fold:checked) .insight-fold-tab .tab-unfold {{ display: none; }}
+
+        body:not(:has(#insight-emergency-fold:checked)) .st-key-emergency_panel {{
+            transform: translateX(calc(100% + 30px));
+            opacity: 0;
+            pointer-events: none;
+        }}
+        .st-key-emergency_panel {{
+            position: fixed !important;
+            right: 14px !important;
+            top: 14px !important;
+            width: min(330px, 80vw) !important;
+            max-height: 72vh !important;
+            max-height: 72dvh !important;
+            z-index: 1000 !important;
+        }}
+        .insight-emergency-fold-tab .tab-fold {{ display: none; }}
+        .insight-emergency-fold-tab .tab-unfold {{ display: inline; }}
+        body:has(#insight-emergency-fold:checked) .insight-emergency-fold-tab .tab-fold {{ display: inline; }}
+        body:has(#insight-emergency-fold:checked) .insight-emergency-fold-tab .tab-unfold {{ display: none; }}
+        body:has(#insight-emergency-fold:checked) .st-key-emergency_panel {{
+            transform: none !important;
+            opacity: 1 !important;
+            pointer-events: auto !important;
+        }}
     }}
     @media (max-width: 760px) {{
-        .st-key-emergency_panel {{
-            position: static; width: auto; max-height: none; margin: 12px;
-        }}
-        /* Same specificity as the full-bleed rule above, or that rule (also
-           !important) would win and the phone map would still be full height,
-           hiding the timeline behind it. */
         .st-key-windy_map iframe[title] {{
-            height: 70vh !important;
-            height: 70dvh !important;
+            height: 100vh !important;
+            height: 100dvh !important;
         }}
         .insight-fold-tab {{ left: 14px; }}
+        .insight-emergency-fold-tab {{ right: 14px; }}
     }}
 
     /* --- Pull to Refresh indicator ------------------------------ */
@@ -350,12 +393,17 @@ def _css(panel_open: bool) -> str:
 
 
 def _fold_handle_html() -> str:
-    """The bookmark tab (and its hidden checkbox) that folds the left panel."""
+    """Bookmark tabs (and hidden checkboxes) that fold the left and right panels."""
     return (
         "<input type='checkbox' id='insight-fold' aria-label='Fold the controls panel'/>"
         "<label class='insight-fold-tab' for='insight-fold'>"
         "<span class='tab-fold'>&#10005; Close</span>"
         "<span class='tab-unfold'>&#9776; Controls</span>"
+        "</label>"
+        "<input type='checkbox' id='insight-emergency-fold' aria-label='Fold the emergency panel'/>"
+        "<label class='insight-emergency-fold-tab' for='insight-emergency-fold'>"
+        "<span class='tab-fold'>&#10005; Close</span>"
+        "<span class='tab-unfold'>&#9888; Emergency</span>"
         "</label>"
     )
 
